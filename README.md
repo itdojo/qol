@@ -10,6 +10,6 @@ How this repo is organized:
 
 | Tool | Location | Description |
 |:--|:--|:--|
-| **[zsh_install.sh](fresh-install/zsh_install.sh)** | [fresh-install/](fresh-install/)) | For MacOS or Linux (Debian).  Installs (if needed) and configures: Homebrew, zsh, oh-my-zsh, NerfFonts, the MesloLGS NF font family, powerlevel10k ZSH theme and and zsh extensions (zsh-autosuggestions zsh-syntax-highlighting zsh-completions).
+| **[zsh_install.sh](fresh-install/zsh_install.sh)** | [fresh-install/](fresh-install/) | For MacOS or Linux (Debian).  Installs (if needed) and configures: Homebrew, zsh, oh-my-zsh, NerfFonts, the MesloLGS NF font family, powerlevel10k ZSH theme and and zsh extensions (zsh-autosuggestions zsh-syntax-highlighting zsh-completions).
 
 
