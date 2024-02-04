@@ -204,4 +204,7 @@ esac
 update_zshrc
 install_zsh_plugins
 
-format_font "✅  Done. Please restart your terminal." "bold" "blue"
+format_font "✅  ZSH install complete. Please restart your terminal." "bold" "red"
+format_font "After restarting your terminal, the PowerLevel10k (p10k) setup wizard will run.
+format_font "Run 'p10k configure' any time to reconfigure your preferences.
+echo ""
