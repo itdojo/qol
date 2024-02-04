@@ -8,8 +8,11 @@ How this repo is organized:
 
 ## Tool List
 
-| Tool | Location | Description |
-|:--|:--|:--|
-| **[zsh_install.sh](fresh-install/zsh_install.sh)** | [fresh-install/](fresh-install/) | For MacOS or Linux (Debian).  Installs (if needed) and configures: Homebrew, zsh, oh-my-zsh, NerfFonts, the MesloLGS NF font family, powerlevel10k ZSH theme and and zsh extensions (zsh-autosuggestions zsh-syntax-highlighting zsh-completions).
+| Tool | Location | Intended OS | Description |
+|:--|:--|:--|:--|
+| **[kernel_update.sh](fresh-install/linux/kernel_update.sh)** | [fresh-install/linux](fresh-install/linux/) | Linux | Updates Linux to the latest mainline kernel version. |
+| **[zsh_install.sh](fresh-install/zsh_install.sh)** | [fresh-install/](fresh-install/) | MacOS or Linux (Debian) |  Installs (if needed) and configures: Homebrew, zsh, oh-my-zsh, NerdFonts, the MesloLGS NF font family, powerlevel10k ZSH theme and and zsh extensions (zsh-autosuggestions zsh-syntax-highlighting zsh-completions).
+
+
 
 
