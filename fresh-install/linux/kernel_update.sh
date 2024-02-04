@@ -14,6 +14,6 @@ check_root
 
 add-apt-repository -y ppa:cappelikan/ppa
 
-apt update && sudo apt install -y mainline
+apt update && apt install -y mainline
 
 mainline install-latest
