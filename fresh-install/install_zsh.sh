@@ -64,7 +64,7 @@ check_for_zsh() {
         if [[ "$os" = "Darwin" ]]; then
             brew install zsh
         else
-            sudo apt install zsh
+            sudo apt install -y zsh
         fi
     fi
     format_font "✅  zsh is installed."
@@ -76,7 +76,7 @@ check_for_git() {
         if [[ "$os" = "Darwin" ]]; then
             brew install git
         else
-            sudo apt install git
+            sudo apt install -y git
         fi
     fi
     format_font "✅  Git is installed."
@@ -182,7 +182,7 @@ case "$os" in
         if ! command -v curl &> /dev/null
         then
             format_font "#️⃣  Installing curl..."
-            sudo apt install curl
+            sudo apt install -y curl
             format_font "✅  curl is installed."
         fi
         local_dir="/usr/share/fonts/truetype/MesloLGS-NF/"
