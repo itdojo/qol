@@ -111,7 +111,17 @@ check_root  # Check for root
 
 trap handle_ctrl_c SIGINT  # Handle CTRL-C
 
+printline dentistry
+format_font "UPGRADING KERNEL" "bold" "blue"
+printline dentistry
+
+# Installing mainline
+printline solid
+section_title="Adding Kernel Repository..."
+format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
 add-apt-repository -y ppa:cappelikan/ppa
+check_status "Checking Result for $section_title"
+
 
 # Installing mainline
 printline solid
@@ -131,5 +141,7 @@ apt --fix-broken install
 
 printline dentistry
 format_font "KERNEL UPGRADE COMPLETE" "bold" "blue"
-format_font "Reboot your computer to load new kernel" "bold" "red"
 printline dentistry
+echo ""
+format_font "Reboot your computer to load new kernel" "bold" "red"
+echo ""
