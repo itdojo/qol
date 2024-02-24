@@ -2,46 +2,65 @@
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
+    echo ""
     echo " ❌  Run as root."
-    echo " ℹ️  Usage: sudo ./${basename $0}"
-    exit
+    echo " ℹ️  Usage: $0"
+    echo ""
+    exit 1
   fi
 }
 
 # Define the function to be executed when SIGINT (CTRL-C) is received
 handle_ctrl_c() {
-    printf "%s\n" "🛑 CTRL-C detected. Exiting..."
+    printf "%s\n" "🛑 CTRL-C detected. Exiting."
     echo ""
     exit 1
 }
 
 printline() {
-    printf "%.s─" $(seq 1 "$(tput cols)")
-    # printf "%.s∙" $(seq 1 "$(tput cols)")  # Different line style
-    # printf "%.s⌶" $(seq 1 "$(tput cols)")  # Different line style
-    # printf "%.s☆" $(seq 1 "$(tput cols)")  # Different line style
-    # printf "%.s⏥" "$(seq 1 "$(tput cols)") # Different line style
-}
+    case $1 in
+        solid)
+            sep="─"   # ─────────────
+            ;;  
+        bullet)
+            sep="•"   # •••••••••••••
+            ;;
+        ibeam)
+            sep="⌶"   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+            ;;
+        star)
+            sep="★"   # ★★★★★★★★★★★★★★
+            ;;
+        dentistry)
+            sep="⏥"  # ⏥⏥⏥⏥⏥⏥⏥⏥
+            ;;
+        *)
+            sep="─"   # ──────────────
+            ;;
+        esac
+printf "%.s$sep" $(seq 1 "$(tput cols)")
+}    
+
+
 
 # Function to check the status of the last executed command
 check_status() {
     message=$1
     if [ $? -eq 0 ]; then
-        section_title="✅  $message Success!"
-        format_font "$section_title" $SUCCESS_WEIGHT $SUCCESS_COLOR
+        section_title="$message Success!"
+        format_font "✅  $section_title" $SUCCESS_WEIGHT $SUCCESS_COLOR
     else
-        section_title="❌  $message Failed!"
-        format_font "$section_title" $WARNING_WEIGHT $WARNING_COLOR
+        section_title="$message Failed!"
+        format_font "❌  $section_title" $WARNING_WEIGHT $WARNING_COLOR
         exit 1
     fi
-    printline
 }
 
 # Function to update and upgrade system
 update_and_upgrade() {
-    message="#️⃣  Updating and upgrading system: "
+    message="Updating and upgrading system... "
     printf "%s\n" "$message"
-    sudo apt -o Acquire::ForceIPv4=true update && sudo apt upgrade -y
+    apt -o Acquire::ForceIPv4=true update && apt upgrade -y
     check_status "$message"
 }
 
@@ -49,7 +68,7 @@ update_and_upgrade() {
 update_repo() {
     message="Updating repository: "
     printf "%s\n" "$message"
-    sudo apt -o Acquire::ForceIPv4=true update
+    apt -o Acquire::ForceIPv4=true update
     check_status "$message"
 }
 
@@ -57,9 +76,9 @@ update_repo() {
 # Function to install packages
 # Usage: install_packages package1 package2 package3...
 install_packages() {
-    printf "%s\n" "#️⃣  Installing $*..."
-    sudo apt install "$@" -y
-    check_status "Package installation: "
+    printf "%s\n" "Installing $*..."
+    apt install "$@" -y
+    check_status "Package(s) installation: "
     needrestart -r a # Automatically restart services if necessary
 }
 
@@ -110,9 +129,3 @@ SUCCESS_COLOR="green" # blue 🔵|red 🔴|green 🟢|yellow 🟡
 SUCCESS_WEIGHT="bold" # normal|bold
 
 clear # Clear the screen
-
-check_root
-trap handle_ctrl_c SIGINT
-
-# Determine if this is a Raspberry Pi 🥧
-model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
