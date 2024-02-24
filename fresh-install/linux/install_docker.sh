@@ -2,46 +2,65 @@
 
 check_root() {
   if [ "$EUID" -ne 0 ]; then
+    echo ""
     echo " ❌  Run as root."
-    echo " ℹ️  Usage: sudo ./${basename $0}"
-    exit
+    echo " ℹ️  Usage: $0"
+    echo ""
+    exit 1
   fi
 }
 
 # Define the function to be executed when SIGINT (CTRL-C) is received
 handle_ctrl_c() {
-    printf "%s\n" "🛑 CTRL-C detected. Exiting..."
+    printf "%s\n" "🛑 CTRL-C detected. Exiting."
     echo ""
     exit 1
 }
 
 printline() {
-    printf "%.s─" $(seq 1 "$(tput cols)")
-    # printf "%.s∙" $(seq 1 "$(tput cols)")  # Different line style
-    # printf "%.s⌶" $(seq 1 "$(tput cols)")  # Different line style
-    # printf "%.s☆" $(seq 1 "$(tput cols)")  # Different line style
-    # printf "%.s⏥" "$(seq 1 "$(tput cols)") # Different line style
-}
+    case $1 in
+        solid)
+            sep="─"   # ─────────────
+            ;;  
+        bullet)
+            sep="•"   # •••••••••••••
+            ;;
+        ibeam)
+            sep="⌶"   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+            ;;
+        star)
+            sep="★"   # ★★★★★★★★★★★★★★
+            ;;
+        dentistry)
+            sep="⏥"  # ⏥⏥⏥⏥⏥⏥⏥⏥
+            ;;
+        *)
+            sep="─"   # ──────────────
+            ;;
+        esac
+printf "%.s$sep" $(seq 1 "$(tput cols)")
+}    
+
+
 
 # Function to check the status of the last executed command
 check_status() {
     message=$1
     if [ $? -eq 0 ]; then
-        section_title="✅  $message Success!"
-        format_font "$section_title" $SUCCESS_WEIGHT $SUCCESS_COLOR
+        section_title="$message Success!"
+        format_font "✅  $section_title" $SUCCESS_WEIGHT $SUCCESS_COLOR
     else
-        section_title="❌  $message Failed!"
-        format_font "$section_title" $WARNING_WEIGHT $WARNING_COLOR
+        section_title="$message Failed!"
+        format_font "❌  $section_title" $WARNING_WEIGHT $WARNING_COLOR
         exit 1
     fi
-    printline
 }
 
 # Function to update and upgrade system
 update_and_upgrade() {
-    message="#️⃣  Updating and upgrading system: "
+    message="Updating and upgrading system... "
     printf "%s\n" "$message"
-    sudo apt -o Acquire::ForceIPv4=true update && sudo apt upgrade -y
+    apt -o Acquire::ForceIPv4=true update && apt upgrade -y
     check_status "$message"
 }
 
@@ -49,7 +68,7 @@ update_and_upgrade() {
 update_repo() {
     message="Updating repository: "
     printf "%s\n" "$message"
-    sudo apt -o Acquire::ForceIPv4=true update
+    apt -o Acquire::ForceIPv4=true update
     check_status "$message"
 }
 
@@ -57,9 +76,9 @@ update_repo() {
 # Function to install packages
 # Usage: install_packages package1 package2 package3...
 install_packages() {
-    printf "%s\n" "#️⃣  Installing $*..."
-    sudo apt install "$@" -y
-    check_status "Package installation: "
+    printf "%s\n" "Installing $*..."
+    apt install "$@" -y
+    check_status "Package(s) installation: "
     needrestart -r a # Automatically restart services if necessary
 }
 
@@ -112,76 +131,92 @@ SUCCESS_WEIGHT="bold" # normal|bold
 clear # Clear the screen
 
 check_root
+
 trap handle_ctrl_c SIGINT
 
+printline dentistry
+format_font "🐳  DOCKER INSTALLER" "bold" "blue"
+# Determine Ubuntu release
+printline dentistry
+section_title="Gathering Release Info... "
+format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
 # Determine if this is a Raspberry Pi 🥧
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
-
 if [ -n "$model" ]; then
-    printf "%s\n" "🥧 This appears to be a Raspberry Pi."
+    printf "%s\n" "🥧 I am a Raspberry Pi."
+fi
+
+# Source the os-release file
+if [ -f /etc/os-release ]; then
+    source /etc/os-release
+    printf "%s\n" "OS Version: $PRETTY_NAME ($VERSION_CODENAME)"
+fi
+
+printline solid
+if [ -n "$model" ]; then
+    # This is a Raspberry Pi
     printf "%s\n" "Performing Raspberry Pi specific Docker installation..."
-    section_title="#️⃣  Installing Docker for $model..."
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    printline
+    section_title="Installing Docker for $model..."
+    format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
     curl -sSL https://get.docker.com | sh
     check_status
-elif [ "$release" = "kali-rolling" ]; then
-    printf "%s\n" "This system appears to be running Kali."
-    section_title="#️⃣  Installing Docker for $release... "
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    printline
-    printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | sudo tee /etc/apt/sources.list.d/docker-ce.list
-    curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
+elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
+    printf "%s\n" "I am a Kali installation."
+    section_title="Installing Docker for $PRETTY_NAME... "
+    format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
+    printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker-ce.list
+    curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
     update_repo
     install_packages docker-ce docker-ce-cli containerd.io
     printf "%s\n" "Enabling and starting the Docker service..."
-    sudo systemctl enable docker --now
+    systemctl enable docker --now
     check_status "Enable Docker service"
     printf "%s\n" "Docker status: $(systemctl is-active docker)"
 else
-    printf "%s\n" "This does not appear to be a Raspberry Pi or a Kali installation."
-    printf "%s\n" "Performing Standard Linux Docker Install..."
-    section_title="#️⃣  Installing Docker for $release... "
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    printline
-    # Installing Docker
+    section_title="Installing Docker for $PRETTY_NAME... "
+    format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
+    printf "%s\n" "This is not a Raspberry Pi or a Kali installation."
     printf "%s\n" "Installing some required packages for Docker..."
     install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
-    check_status "Install required packages"
+    check_status "Checking Result for $section_title"
 
     # Add Docker's official GPG key:
-    section_title="🔑  Adding Docker's GPG key... "
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    printline
-    sudo install -m 0755 -d /etc/apt/keyrings
+    printline solid
+    section_title="Adding Docker's GPG key... "
+    format_font "🔑  $section_title" $TITLE_WEIGHT $TITLE_COLOR
+    install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg # Remove any existing Docker GPG key
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    sudo chmod a+r /etc/apt/keyrings/docker.gpg
-    check_status "$section_title"
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    check_status "Checking Result for $section_title"
 
     # Add the repository to apt sources
-    section_title="#️⃣  Adding Docker repository to apt sources... "
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    printline
+    printline solid
+    section_title="Adding Docker repository to apt sources... "
+    format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-        $(. /etc/os-release && echo "$VERSION_CODENAME") stable" |
-        sudo tee /etc/apt/sources.list.d/docker.list >/dev/null
-    check_status "$section_title"
+        $VERSION_CODENAME stable" |
+        tee /etc/apt/sources.list.d/docker.list >/dev/null
+    check_status "Checking Result for $section_title"
 
     update_repo
-
     # Installing Docker
-    printline
-    section_title="#️⃣  Installing Docker... "
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    printline
+    printline solid
+    section_title="Installing Docker... "
+    format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    check_status "$section_title"
-
-    # Adding user to docker group
-    section_title="#️⃣  Adding $SUDO_USER to docker group..."
-    format_font "$section_title" $TITLE_WEIGHT $TITLE_COLOR
-    sudo usermod -aG docker "$SUDO_USER"
-    check_status "$section_title"
+    check_status "Checking Result for $section_title"
 fi
+
+# Adding user to docker group
+printline solid
+section_title="Adding $USER to docker group..."
+format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
+usermod -aG docker "$USER"
+check_status "Checking Result for $section_title"
+
+printline dentistry
+format_font "🐳  DOCKER INSTALLER COMPLETE" "bold" "blue"
+# Determine Ubuntu release
+printline dentistry
