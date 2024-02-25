@@ -8,7 +8,7 @@ source base_functions.sh
 
 clear # Clear the screen
 
-check_root  # Check for root
+as_root  # Check for root
 
 trap handle_ctrl_c SIGINT  # Handle CTRL-C
 
