@@ -16,11 +16,10 @@ printline dentistry
 format_font "UPGRADING KERNEL" "bold" "blue"
 printline dentistry
 
-apt -y --fix-broken install
-
 # Installing mainline
 section_title="Adding Kernel Repository..."
 format_font "#️⃣   $section_title" $TITLE_WEIGHT $TITLE_COLOR
+apt -y --fix-broken install
 add-apt-repository -y ppa:cappelikan/ppa
 check_status "Checking Result for $section_title"
 
