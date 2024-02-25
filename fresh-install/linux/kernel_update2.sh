@@ -45,12 +45,14 @@ apt -y --fix-broken install
 kernel_end=$(uname -r)
 if [ "$kernel_start" != "$kernel_end" ]; then
     echo ""
-    format_font " Kernel has been updated from $kernel_start to $kernel_end." "bold" "green"
+    format_font "Kernel has been updated." "bold" "green"
+    format_font "$kernel_start ---> $kernel_end." "bold" "green"
+    echo ""
     format_font "Reboot to load the new $kernel_end kernel." "bold" "red"
     echo ""
 else
     echo ""
-    format_font "Kernel $kernel_end is already up to date.  No need to reboot." "bold" "green"
+    format_font "Kernel is already up to date ($kernel_end).  No need to reboot." "bold" "green"
     echo ""
 fi
 
