@@ -52,6 +52,7 @@ check_root                  # Confirm running as root
 trap handle_ctrl_c SIGINT   # Gracefully handle CTRL-C
 
 fstring "🐳  DOCKER INSTALLER FOR LINUX" "title"
+printline dentistry
 
 # Check if Docker is already installed
 if command -v docker > /dev/null; then
@@ -98,7 +99,7 @@ if [ -n "$model" ]; then
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") specific Docker installation..."
 
     curl -sSL https://get.docker.com | sh
-    check_status "$(fstring "Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
+    check_status "$(fstring "🥧  Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
     printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
     fstring "Installing Docker for $PRETTY_NAME... " "section"
@@ -145,4 +146,5 @@ usermod -aG docker "$USER"
 check_status "Add $USER to docker group" $?
 
 fstring "🐳  DOCKER INSTALLER COMPLETE" "title"
+printline dentistry
 echo""
