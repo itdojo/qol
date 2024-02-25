@@ -7,29 +7,29 @@ uninstall_docker() {
     fi
 
     echo "Stopping all running Docker containers..."
-    docker stop $(docker ps -aq) 2>/dev/null    # Stop all running containers
+    docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
     echo "Removing all Docker containers..."
-    docker rm $(docker ps -aq) 2>/dev/null      # Remove all Docker containers
+    docker rm "$(docker ps -aq)" 2>/dev/null      # Remove all Docker containers
     echo "Removing all Docker images..."
-    docker rmi $(docker images -q) 2>/dev/null  # Remove all Docker images
+    docker rmi "$(docker images -q)" 2>/dev/null  # Remove all Docker images
     echo "Removing all Docker volumes..."
-    docker volume rm $(docker volume ls -q) 2>/dev/null  # Remove all Docker volumes
+    docker volume rm "$(docker volume ls -q)" 2>/dev/null  # Remove all Docker volumes
     echo "Removing all Docker networks..."
-    docker network rm $(docker network ls -q) 2>/dev/null  # Remove all Docker networks
+    docker network rm "$(docker network ls -q)" 2>/dev/null  # Remove all Docker networks
     echo "Removing all Docker secrets..."
-    docker secret rm $(docker secret ls -q) 2>/dev/null  # Remove all Docker secrets
+    docker secret rm "$(docker secret ls -q)" 2>/dev/null  # Remove all Docker secrets
     echo "Removing all Docker configs..."
-    docker config rm $(docker config ls -q) 2>/dev/null  # Remove all Docker configs
+    docker config rm "$(docker config ls -q)" 2>/dev/null  # Remove all Docker configs
     echo "Removing all Docker plugins..."
-    docker plugin rm $(docker plugin ls -q) 2>/dev/null  # Remove all Docker plugins
+    docker plugin rm "$(docker plugin ls -q)" 2>/dev/null  # Remove all Docker plugins
     echo "Removing all Docker nodes..."
-    docker node rm $(docker node ls -q) 2>/dev/null  # Remove all Docker nodes
+    docker node rm "$(docker node ls -q)" 2>/dev/null  # Remove all Docker nodes
     echo "Removing all Docker services..."
-    docker service rm $(docker service ls -q) 2>/dev/null  # Remove all Docker services
+    docker service rm "$(docker service ls -q)" 2>/dev/null  # Remove all Docker services
     echo "Removing all Docker stacks..."
-    docker stack rm $(docker stack ls -q) 2>/dev/null  # Remove all Docker stacks
+    docker stack rm "$(docker stack ls -q)" 2>/dev/null  # Remove all Docker stacks
     echo "Removing all Docker tasks..."
-    docker task rm $(docker task ls -q) 2>/dev/null  # Remove all Docker tasks
+    docker task rm "$(docker task ls -q)" 2>/dev/null  # Remove all Docker tasks
     echo "Uninstalling Docker..."
     sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli
     if command -v docker-desktop > /dev/null; then
@@ -78,6 +78,7 @@ if command -v docker > /dev/null; then
         echo "Removing Existing Docker Installation... "
         uninstall_docker
     fi
+fi
 
 # Determine if Kali, Raspberry Pi or "regular" Linux
 fstring "Gathering Release Info... " "section"
@@ -97,7 +98,7 @@ if [ -n "$model" ]; then
     # This is a Raspberry Pi
     fstring "Installing Docker for $model... " "section"
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") specific Docker installation..."
-    if [ ! command -v curl > /dev/null ]; then
+    if ! command -v curl > /dev/null; then
         apt update && apt install curl -y
     fi
     curl -sSL https://get.docker.com | sh
