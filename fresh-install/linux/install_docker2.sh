@@ -70,14 +70,16 @@ if command -v docker > /dev/null; then
 fi
 
 if ! command -v curl > /dev/null; then
+    echo "Installing curl..."
     apt update && apt install curl -y
 fi
 if ! command -v needreinstall > /dev/null; then
+    echo "Installing needrestart..."
     apt update && apt install needrestart -y
 fi
 
 # Determine if Kali, Raspberry Pi or "regular" Linux
-fstring "Gathering Release Info... " "section"
+fstring "Gathering Linux Release Info... " "section"
 # Determine if this is a Raspberry Pi 🥧
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
