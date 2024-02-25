@@ -12,6 +12,8 @@ as_root  # Check for root
 
 trap handle_ctrl_c SIGINT  # Handle CTRL-C
 
+kernel_start=$(uname -r)
+
 printline dentistry
 format_font "UPGRADING KERNEL" "bold" "blue"
 printline dentistry
@@ -44,5 +46,14 @@ printline dentistry
 format_font "KERNEL UPGRADE COMPLETE" "bold" "blue"
 printline dentistry
 echo ""
-format_font "Reboot your computer to load new kernel" "bold" "red"
+
+kernel_end=$(uname -r)
+if [ "$kernel_start" != "$kernel_end" ]; then
+    format_font "Kernel has been updated from $kernel_start to $kernel_end" "bold" "green"
+    format_font "Reboot to load new kernel" "bold" "red"
+else
+    format_font "Kernel is already up to date" "bold" "green"
+    echo "No need to reboot."
+fi
+
 echo ""
