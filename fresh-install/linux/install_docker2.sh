@@ -71,14 +71,13 @@ if command -v docker > /dev/null; then
     echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
     read -p "Do you want to reinstall Docker? [y/N]: " confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Removing Existing Docker Installation... "
-        uninstall_docker
-    else
         echo "Docker reinstall cancelled. Exiting..."
         echo ""
         exit 0  # Terminate the script
+    else
+        echo "Removing Existing Docker Installation... "
+        uninstall_docker
     fi
-fi
 
 # Determine if Kali, Raspberry Pi or "regular" Linux
 fstring "Gathering Release Info... " "section"
