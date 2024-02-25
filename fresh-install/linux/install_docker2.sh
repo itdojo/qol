@@ -49,6 +49,7 @@ uninstall_docker() {
 . base_functions2.sh        # Source the base functions
 clear                       # Clear the screen
 check_root                  # Confirm running as root
+check_if_linux              # Confirm running on Linux
 trap handle_ctrl_c SIGINT   # Gracefully handle CTRL-C
 
 fstring "🐳  DOCKER INSTALLER FOR LINUX" "title"

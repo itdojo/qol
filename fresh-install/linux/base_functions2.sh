@@ -31,6 +31,13 @@ handle_ctrl_c() {
     exit 1
 }
 
+check_if_linux() {
+    if [ "$(uname)" != "Linux" ]; then
+        echo "This script is intended for Linux only."
+        exit 1
+    fi
+}
+
 # Update and upgrade system
 update_and_upgrade() {
     message="Updating and upgrading system... "
