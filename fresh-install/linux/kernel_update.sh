@@ -18,7 +18,15 @@ model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
     printf "%s\n" "🥧 I am a $(fstring "Raspberry Pi" "normal" "bold" "red")."
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red")-specific kernel update..."
-    install_packages ntpdate ca-certificates
+    if ! command -v ntpdate >/dev/null; then
+        install_packages ntpdate
+    fi
+    if ! command -v ca-certificates >/dev/null; then
+        install_packages ca-certificates
+    fi
+    if ! command -v rpi-update >/dev/null; then
+        install_packages rpi-update
+    fi
     ntpdate -u ntp.ubuntu.com
     rpi-update
     check_status "Checking Result of Raspberry Pi Kernel Update" $?
