@@ -1,10 +1,20 @@
-#!/bin/bash
-
-check_root() {
+# Check if the script is being run as root
+as_root() {
   if [ "$EUID" -ne 0 ]; then
     echo ""
     echo " ❌  Run as root."
     echo " ℹ️  Usage: sudo $0"
+    echo ""
+    exit 1
+  fi
+}
+
+# Check if the script is being run as root
+as_not_root() {
+  if [ "$EUID" -eq 0 ]; then
+    echo ""
+    echo " ❌  Do not run as root."
+    echo " ℹ️  Usage: $0"
     echo ""
     exit 1
   fi
@@ -16,32 +26,6 @@ handle_ctrl_c() {
     echo ""
     exit 1
 }
-
-printline() {
-    case $1 in
-        solid)
-            sep="─"   # ─────────────
-            ;;  
-        bullet)
-            sep="•"   # •••••••••••••
-            ;;
-        ibeam)
-            sep="⌶"   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
-            ;;
-        star)
-            sep="★"   # ★★★★★★★★★★★★★★
-            ;;
-        dentistry)
-            sep="⏥"  # ⏥⏥⏥⏥⏥⏥⏥⏥
-            ;;
-        *)
-            sep="─"   # ──────────────
-            ;;
-        esac
-printf "%.s$sep" $(seq 1 "$(tput cols)")
-}    
-
-
 
 # Function to check the status of the last executed command
 check_status() {
@@ -81,6 +65,18 @@ install_packages() {
     check_status "Package(s) installation: "
     needrestart -r a # Automatically restart services if necessary
 }
+
+printline() {
+    case $1 in
+        solid)     sep="─" ;;   # ───────────── 
+        bullet)    sep="•" ;;   # •••••••••••••
+        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+        star)      sep="★" ;;   # ★★★★★★★★★★★★★★
+        dentistry) sep="⏥" ;;  # ⏥⏥⏥⏥⏥⏥⏥⏥
+        *)         sep="─" ;;   # ──────────────
+        esac
+    printf "%.s$sep" $(seq 1 "$(tput cols)")
+}   
 
 format_font() {
     # Usage: format_font "Text to be formatted" "font weight" "font color"
