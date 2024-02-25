@@ -16,6 +16,7 @@ printline dentistry
 # Determine if this is a Raspberry Pi 🥧
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
+    export DEBIAN_FRONTEND=noninteractive
     printf "%s\n" "🥧 I am a $(fstring "Raspberry Pi" "normal" "bold" "red")."
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red")-specific kernel update..."
     if ! command -v ntpdate >/dev/null; then
