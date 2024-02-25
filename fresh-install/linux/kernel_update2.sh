@@ -12,11 +12,11 @@ as_root  # Check for root
 
 trap handle_ctrl_c SIGINT  # Handle CTRL-C
 
-apt -y --fix-broken install
-
 printline dentistry
 format_font "UPGRADING KERNEL" "bold" "blue"
 printline dentistry
+
+apt -y --fix-broken install
 
 # Installing mainline
 section_title="Adding Kernel Repository..."
