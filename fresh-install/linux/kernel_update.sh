@@ -13,6 +13,12 @@ kernel_start=$(uname -r)   # Get the current kernel version
 fstring "KERNEL UPDATER FOR LINUX" "title"
 printline dentistry
 
+if ! command -v needrestart >/dev/null; then
+    fstring "Installing needrestart package..."
+    install_packages needrestart
+    check_status "Checking Result of needrestart installation" $?
+fi
+
 # Determine if this is a Raspberry Pi 🥧
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
