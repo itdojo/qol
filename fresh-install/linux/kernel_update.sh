@@ -15,7 +15,7 @@ printline dentistry
 
 if ! command -v needrestart >/dev/null; then
     fstring "Installing needrestart package..."
-    install_packages needrestart
+    install_packages needrestart software-properties-common
     check_status "Checking Result of needrestart installation" $?
 fi
 
