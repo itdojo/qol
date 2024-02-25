@@ -3,7 +3,7 @@
 # Usgage: source base_functions.sh
 #
 # Check if the script is being run as root
-check_root() {
+as_root() {
   if [ "$EUID" -ne 0 ]; then
     echo ""
     echo " ❌  Run as root."
