@@ -20,15 +20,14 @@ if [ -f /etc/os-release ]; then
     printf "%s\n" "OS Version: $PRETTY_NAME ($VERSION_CODENAME)"
 fi
 
-printline solid
 if [ -n "$model" ]; then
     # This is a Raspberry Pi
     fstring "Installing Docker for $model... " "section"
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") specific Docker installation..."
     curl -sSL https://get.docker.com | sh
-    check_status
+    check_status "$(fstring "Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
-    printf "%s\n" "I am a $(printf "$PRETTY_NAME" "normal" "bold" "blue") installation."
+    printf "%s\n" "I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
     fstring "Installing Docker for $PRETTY_NAME... " "section"
     printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker-ce.list
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
@@ -38,8 +37,8 @@ elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
     systemctl enable docker --now
     printf "%s\n" "🐳 Docker status: $(systemctl is-active docker)"
 else
-    fprint "Installing Docker for $PRETTY_NAME... " "section"
-    printf "%s\n" "This is not a $fstring "Raspberry Pi" "normal" "normal" "red") or $fstring "Kali" "normal" "normal" "blue") installation."
+    fstring "Installing Docker for $PRETTY_NAME... " "section"
+    printf "%s\n" "This is not a $(fstring "Raspberry Pi" "normal" "normal" "red") or $(fstring "Kali" "normal" "normal" "blue") installation."
     printf "%s\n" "📦  Installing some required packages for 🐳 Docker..."
     install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
     check_status "Checking result of package installation" $?
@@ -68,9 +67,9 @@ else
 fi
 
 # Adding user to docker group
-fprint "Adding $USER to docker group... " "section"
+fstring "Adding $USER to docker group... " "section"
 usermod -aG docker "$USER"
 check_status "Add $USER to docker group" $?
 
-frpint "🐳  DOCKER INSTALLER COMPLETE" "title"
+fstring "🐳  DOCKER INSTALLER COMPLETE" "title"
 echo""
