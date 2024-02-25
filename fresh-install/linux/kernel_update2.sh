@@ -15,7 +15,7 @@ trap handle_ctrl_c SIGINT  # Handle CTRL-C
 kernel_start=$(uname -r)
 
 printline dentistry
-format_font "CHECKING FOR/INSTALLING UPDATED KERNEL" "bold" "blue"
+format_font "UPGRADING TO NEWEST STABLE KERNEL" "bold" "blue"
 printline dentistry
 
 # Installing mainline
@@ -44,15 +44,18 @@ apt -y --fix-broken install
 
 kernel_end=$(uname -r)
 if [ "$kernel_start" != "$kernel_end" ]; then
-    format_font "Kernel has been updated from $kernel_start to $kernel_end" "bold" "green"
-    format_font "Reboot to load new kernel" "bold" "red"
+    echo ""
+    format_font " Kernel has been updated from $kernel_start to $kernel_end." "bold" "green"
+    format_font "Reboot to load the new $kernel_end kernel." "bold" "red"
+    echo ""
 else
-    format_font "Kernel is already up to date" "bold" "green"
-    echo "No need to reboot."
+    echo ""
+    format_font "Kernel $kernel_end is already up to date.  No need to reboot." "bold" "green"
+    echo ""
 fi
 
 printline dentistry
-format_font "KERNEL UPGRADE COMPLETE" "bold" "blue"
+format_font "🏁  KERNEL UPGRADE COMPLETE" "bold" "blue"
 printline dentistry
 echo ""
 
