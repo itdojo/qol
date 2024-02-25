@@ -4,7 +4,7 @@ check_root() {
   if [ "$EUID" -ne 0 ]; then
     echo ""
     echo " ❌  Run as root."
-    echo " ℹ️  Usage: $0"
+    echo " ℹ️  Usage: sudo $0"
     echo ""
     exit 1
   fi
