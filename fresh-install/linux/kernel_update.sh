@@ -16,11 +16,17 @@ printline dentistry
 # Installing mainline
 fstring "Adding Kernel Update Repo" "section"
 apt -y --fix-broken install
+if ! command -v add-apt-repository &> /dev/null; then
+    fstring "Adding add-apt-repository utility..."
+    install_packages software-properties-common
+    check_status "Checking Result of add-apt-repository installation" $?
+fi
 add-apt-repository -y ppa:cappelikan/ppa
 check_status "Checking Addition of Kernel Update Repo" $?
 
 # Installing mainline
 fstring "Installing mainline utility..." "section"
+update_repo
 install_packages mainline
 check_status "Checking Result mainline installation" $?
 
