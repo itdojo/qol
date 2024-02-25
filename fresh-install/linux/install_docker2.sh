@@ -93,18 +93,18 @@ if [ -n "$model" ]; then
     curl -sSL https://get.docker.com | sh
     check_status "$(fstring "Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
-    printf "%s\n" "I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
-    fstring "Installing Docker for $PRETTY_NAME... " "section"
+    printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
+    fstring "ℹ️  Installing Docker for $PRETTY_NAME... " "section"
     printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker-ce.list
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
     update_repo
     install_packages docker-ce docker-ce-cli containerd.io
     printf "%s\n" "Enabling and starting the Docker service..."
     systemctl enable docker --now
-    printf "%s\n" "🐳 Docker status: $(systemctl is-active docker)"
+    printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
 else
     fstring "Installing Docker for $PRETTY_NAME... " "section"
-    printf "%s\n" "This is not a $(fstring "Raspberry Pi" "normal" "normal" "red") or $(fstring "Kali" "normal" "normal" "blue") installation."
+    printf "%s\n" "ℹ️  This is not a $(fstring "Raspberry Pi" "normal" "normal" "red") or $(fstring "Kali" "normal" "normal" "blue") installation."
     printf "%s\n" "📦  Installing some required packages for 🐳 Docker..."
     install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
     check_status "Checking result of package installation" $?
@@ -115,7 +115,7 @@ else
     rm -f /etc/apt/keyrings/docker.gpg # Remove any existing Docker GPG key
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
-    check_status "Checking Result for Adding Docker's GPG key"
+    check_status "Checking Result for Adding Docker's GPG key" $?
 
     # Add the repository to apt sources
     fprint "Adding Docker repository to apt sources... " "section"
@@ -129,7 +129,7 @@ else
     # Installing Docker
     fprint "Installing Docker... " "section"
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    check_status "Checking Result for Docker installation" $?
+    check_status "Checking Result of Docker installation" $?
 fi
 
 # Adding user to docker group
