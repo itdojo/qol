@@ -90,11 +90,14 @@ if [ -n "$model" ]; then
     if ! command -v curl > /dev/null; then
         apt update && apt install curl -y
     fi
+    if ! command -n needreinstall > /dev/null; then
+        apt update && apt install needrestart -y
+    fi
     curl -sSL https://get.docker.com | sh
     check_status "$(fstring "Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
     printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
-    fstring "ℹ️  Installing Docker for $PRETTY_NAME... " "section"
+    fstring "Installing Docker for $PRETTY_NAME... " "section"
     printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker-ce.list
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
     update_repo
