@@ -69,6 +69,13 @@ if command -v docker > /dev/null; then
     fi
 fi
 
+if ! command -v curl > /dev/null; then
+    apt update && apt install curl -y
+fi
+if ! command -v needreinstall > /dev/null; then
+    apt update && apt install needrestart -y
+fi
+
 # Determine if Kali, Raspberry Pi or "regular" Linux
 fstring "Gathering Release Info... " "section"
 # Determine if this is a Raspberry Pi 🥧
@@ -87,12 +94,7 @@ if [ -n "$model" ]; then
     # This is a Raspberry Pi
     fstring "Installing Docker for $model... " "section"
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") specific Docker installation..."
-    if ! command -v curl > /dev/null; then
-        apt update && apt install curl -y
-    fi
-    if ! command -n needreinstall > /dev/null; then
-        apt update && apt install needrestart -y
-    fi
+
     curl -sSL https://get.docker.com | sh
     check_status "$(fstring "Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
