@@ -55,7 +55,7 @@ else
 fi
 
 printline dentistry
-format_font "🏁  KERNEL UPGRADE COMPLETE" "bold" "blue"
+format_font "🏁  KERNEL UPGRADE COMPLETE  🏁" "bold" "blue"
 printline dentistry
 echo ""
 
