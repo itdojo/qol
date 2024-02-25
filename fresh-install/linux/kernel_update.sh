@@ -17,7 +17,7 @@ printline dentistry
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
     printf "%s\n" "🥧 I am a $(fstring "Raspberry Pi" "normal" "bold" "red")."
-    printf "%s\n" "Performing $(fstring "Raspberry Pi-specific" "normal" "bold" "red") kernel update..."
+    printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red")-specific kernel update..."
     install_packages ntpdate ca-certificates
     ntpdate -u ntp.ubuntu.com
     rpi-update
