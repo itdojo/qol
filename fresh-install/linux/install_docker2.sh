@@ -118,7 +118,7 @@ else
     check_status "Checking result of package installation" $?
 
     # Add Docker's official GPG key:
-    frpint "🔑  Adding Docker's GPG key... " "section"
+    fstring "🔑  Adding Docker's GPG key... " "section"
     install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg # Remove any existing Docker GPG key
     curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
@@ -126,7 +126,7 @@ else
     check_status "Checking Result for Adding Docker's GPG key" $?
 
     # Add the repository to apt sources
-    fprint "Adding Docker repository to apt sources... " "section"
+    fstring "Adding Docker repository to apt sources... " "section"
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
         $VERSION_CODENAME stable" |
@@ -135,7 +135,7 @@ else
 
     update_repo
     # Installing Docker
-    fprint "Installing Docker... " "section"
+    fstring "Installing Docker... " "section"
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Checking Result of Docker installation" $?
 fi
