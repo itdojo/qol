@@ -29,12 +29,12 @@ handle_ctrl_c() {
 
 # Function to check the status of the last executed command
 check_status() {
-    message=$1
+    local message=$1
     if [ $? -eq 0 ]; then
-        section_title="$message Success!"
+        local section_title="$message Success!"
         format_font "✅  $section_title" $SUCCESS_WEIGHT $SUCCESS_COLOR
     else
-        section_title="$message Failed!"
+        local section_title="$message Failed!"
         format_font "❌  $section_title" $WARNING_WEIGHT $WARNING_COLOR
         exit 1
     fi
