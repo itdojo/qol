@@ -176,7 +176,7 @@ fstring() {
     # Print the line, text, and line again if linetype is set
     if [[ -n $linetype ]]; then printline "$linetype"; fi
     echo -e "${color}${string}${reset}"
-    if [[ -n $linetype ]]; then printline "$linetype"; fi
+    #if [[ -n $linetype ]]; then printline "$linetype"; fi
 }
 
 # Import the os-release file
