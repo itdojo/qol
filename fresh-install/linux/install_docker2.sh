@@ -144,6 +144,9 @@ fi
 fstring "Adding $USER to docker group... " "section"
 usermod -aG docker "$USER"
 check_status "Add $USER to docker group" $?
+fstring "Adding $SUDO_USER to docker group... " "section"
+usermod -aG docker "$SUDO_USER"
+check_status "Add $SUDO_USER to docker group" $?
 
 fstring "🐳  DOCKER INSTALLER COMPLETE" "title"
 printline dentistry
