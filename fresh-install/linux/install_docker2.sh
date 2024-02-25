@@ -1,12 +1,83 @@
 #!/bin/bash
 
+uninstall_docker() {
+    if ! command -v apt > /dev/null; then
+        echo "❌  Cannot uninstall Docker. apt package manager not found."
+        exit 1  # Terminate the script
+    fi
+
+    echo "Stopping all running Docker containers..."
+    docker stop $(docker ps -aq) 2>/dev/null    # Stop all running containers
+    echo "Removing all Docker containers..."
+    docker rm $(docker ps -aq) 2>/dev/null      # Remove all Docker containers
+    echo "Removing all Docker images..."
+    docker rmi $(docker images -q) 2>/dev/null  # Remove all Docker images
+    echo "Removing all Docker volumes..."
+    docker volume rm $(docker volume ls -q) 2>/dev/null  # Remove all Docker volumes
+    echo "Removing all Docker networks..."
+    docker network rm $(docker network ls -q) 2>/dev/null  # Remove all Docker networks
+    echo "Removing all Docker secrets..."
+    docker secret rm $(docker secret ls -q) 2>/dev/null  # Remove all Docker secrets
+    echo "Removing all Docker configs..."
+    docker config rm $(docker config ls -q) 2>/dev/null  # Remove all Docker configs
+    echo "Removing all Docker plugins..."
+    docker plugin rm $(docker plugin ls -q) 2>/dev/null  # Remove all Docker plugins
+    echo "Removing all Docker nodes..."
+    docker node rm $(docker node ls -q) 2>/dev/null  # Remove all Docker nodes
+    echo "Removing all Docker services..."
+    docker service rm $(docker service ls -q) 2>/dev/null  # Remove all Docker services
+    echo "Removing all Docker stacks..."
+    docker stack rm $(docker stack ls -q) 2>/dev/null  # Remove all Docker stacks
+    echo "Removing all Docker tasks..."
+    docker task rm $(docker task ls -q) 2>/dev/null  # Remove all Docker tasks
+    echo "Uninstalling Docker..."
+    sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli
+    if command -v docker-desktop > /dev/null; then
+        # Uninstall Docker Desktop
+        echo "Uninstalling Docker Desktop..."
+        sudo apt-get purge -y docker-desktop
+        sudo apt-get autoremove -y --purge docker-desktop
+    fi
+    if command -v docker-compose > /dev/null; then
+        # Uninstall Docker Compose
+        echo "Uninstalling Docker Compose..."
+        sudo apt-get purge -y docker-compose
+        sudo apt-get autoremove -y --purge docker-compose
+    fi
+    sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce  
+
+    sudo rm -rf /var/lib/docker /var/lib/containerd      # Remove Docker storage directories
+    sudo rm -rf /etc/docker                              # Remove Docker config files
+    sudo rm -rf ~/.docker                                # Remove Docker user directory
+    if getent group docker > /dev/null; then
+        sudo groupdel docker                             # Remove Docker group
+    fi
+    sudo rm -rf /var/run/docker.sock                     # Remove Docker socket
+
+    echo "Docker has been uninstalled."
+}
+
 . base_functions2.sh        # Source the base functions
 clear                       # Clear the screen
 check_root                  # Confirm running as root
 trap handle_ctrl_c SIGINT   # Gracefully handle CTRL-C
 
-fstring "🐳  DOCKER INSTALLER" "title"
+fstring "🐳  DOCKER INSTALLER FOR LINUX" "title"
 
+# Check if Docker is already installed
+if command -v docker > /dev/null; then
+    echo "Docker is already installed."
+    echo "Reinstalling will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
+    echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
+    read -p "Do you want to reinstall Docker? [y/N]: " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Docker reinstall cancelled. Exiting..."
+        echo ""
+        exit 0  # Terminate the script
+    fi
+fi
+
+# Determine if Kali, Raspberry Pi or "regular" Linux
 fstring "Gathering Release Info... " "section"
 # Determine if this is a Raspberry Pi 🥧
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
@@ -24,6 +95,9 @@ if [ -n "$model" ]; then
     # This is a Raspberry Pi
     fstring "Installing Docker for $model... " "section"
     printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") specific Docker installation..."
+    if [ ! command -v curl > /dev/null ]; then
+        apt update && apt install curl -y
+    fi
     curl -sSL https://get.docker.com | sh
     check_status "$(fstring "Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
