@@ -56,7 +56,6 @@ update_repo() {
     check_status "$message"
 }
 
-
 # Function to install packages
 # Usage: install_packages package1 package2 package3...
 install_packages() {
@@ -83,43 +82,28 @@ format_font() {
     TEXT=$1         # The string to be formatted
     RESET="\033[0m" # Resets colors to default
     case $2 in      # $2 = font weight
-    normal)
-        WEIGHT=0
-        ;;
-    bold)
-        WEIGHT=1
-        ;;
-    *) # default to normal
-        WEIGHT=0
-        ;;
+    normal) WEIGHT=0 ;; # normal
+    bold)   WEIGHT=1 ;; # bold
+    *)      WEIGHT=0 ;; # normal (default)
     esac
 
     case $3 in # $3 = font color
-    blue)   # 🔵
-        COLOR="\033[$WEIGHT;34m"
-        ;;
-    red)    # 🔴
-        COLOR="\033[$WEIGHT;31m"
-        ;;
-    green)  # 🟢
-        COLOR="\033[$WEIGHT;32m"
-        ;;
-    yellow) # 🟡
-        COLOR="\033[$WEIGHT;33m"
-        ;;
-    *) # default to blue 🔵
-        COLOR="\033[$WEIGHT;34m"
-        ;;
+    blue)   COLOR="\033[$WEIGHT;34m" ;;  # 🔵
+    red)    COLOR="\033[$WEIGHT;31m" ;;  # 🔴
+    green)  COLOR="\033[$WEIGHT;32m" ;;  # 🟢
+    yellow) COLOR="\033[$WEIGHT;33m" ;;  # 🟡
+    *) COLOR="\033[$WEIGHT;34m"      ;;  # 🔵 (default)
     esac
-
     # Print the string with color and weight
     echo -e "${COLOR}${TEXT}${RESET}"
 }
 
 # Set some font  weight and color preferences
-TITLE_COLOR="yellow"  # blue 🔵|red 🔴|green 🟢|yellow 🟡
-TITLE_WEIGHT="bold"   # normal|bold
-WARNING_COLOR="red"   # blue 🔵|red 🔴|green 🟢|yellow 🟡
-WARNING_WEIGHT="bold" # normal|bold
-SUCCESS_COLOR="green" # blue 🔵|red 🔴|green 🟢|yellow 🟡
-SUCCESS_WEIGHT="bold" # normal|bold
+# blue 🔵 | red 🔴 | green 🟢 | yellow 🟡
+TITLE_COLOR="yellow"  
+TITLE_WEIGHT="bold"  
+WARNING_COLOR="red"  
+WARNING_WEIGHT="bold"
+SUCCESS_COLOR="green"
+SUCCESS_WEIGHT="bold"
+
