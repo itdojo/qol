@@ -96,7 +96,7 @@ fi
 if [ -n "$model" ]; then
     # This is a Raspberry Pi
     fstring "Installing Docker for $model... " "section"
-    printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") specific Docker installation..."
+    printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") Docker installation..."
 
     curl -sSL https://get.docker.com | sh
     check_status "$(fstring "🥧  Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
