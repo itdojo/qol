@@ -16,20 +16,9 @@ uninstall_docker() {
     docker volume rm "$(docker volume ls -q)" 2>/dev/null  # Remove all Docker volumes
     echo "Removing all Docker networks..."
     docker network rm "$(docker network ls -q)" 2>/dev/null  # Remove all Docker networks
-    echo "Removing all Docker secrets..."
-    docker secret rm "$(docker secret ls -q)" 2>/dev/null  # Remove all Docker secrets
-    echo "Removing all Docker configs..."
-    docker config rm "$(docker config ls -q)" 2>/dev/null  # Remove all Docker configs
     echo "Removing all Docker plugins..."
     docker plugin rm "$(docker plugin ls -q)" 2>/dev/null  # Remove all Docker plugins
-    echo "Removing all Docker nodes..."
-    docker node rm "$(docker node ls -q)" 2>/dev/null  # Remove all Docker nodes
-    echo "Removing all Docker services..."
-    docker service rm "$(docker service ls -q)" 2>/dev/null  # Remove all Docker services
-    echo "Removing all Docker stacks..."
-    docker stack rm "$(docker stack ls -q)" 2>/dev/null  # Remove all Docker stacks
-    echo "Removing all Docker tasks..."
-    docker task rm "$(docker task ls -q)" 2>/dev/null  # Remove all Docker tasks
+    echo "Note: This does not remove Docker Swarm services, nodes, or secrets."
     echo "Uninstalling Docker..."
     sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli
     if command -v docker-desktop > /dev/null; then
