@@ -127,5 +127,3 @@ WARNING_COLOR="red"   # blue 🔵|red 🔴|green 🟢|yellow 🟡
 WARNING_WEIGHT="bold" # normal|bold
 SUCCESS_COLOR="green" # blue 🔵|red 🔴|green 🟢|yellow 🟡
 SUCCESS_WEIGHT="bold" # normal|bold
-
-clear # Clear the screen

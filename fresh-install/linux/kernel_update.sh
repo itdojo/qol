@@ -3,6 +3,8 @@
 # Update kernel to latest version
 # Usage: sudo ./kernel_update.sh
 
+source base_functions.sh
+
 check_root() {
   if [ "$EUID" -ne 0 ]; then
     echo "❌ Run as root."
