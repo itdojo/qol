@@ -49,7 +49,7 @@ update_and_upgrade() {
 
 # Update repository
 update_repo() {
-    message="Updating repository: "
+    message="Updating repository..."
     printf "%s\n" "$message"
     apt -o Acquire::ForceIPv4=true update
     check_status "$message" $?
