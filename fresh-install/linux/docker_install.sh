@@ -47,19 +47,25 @@
 # }
 
 if [ ! -f ./base_functions.sh ] > /dev/null; then
-    echo "❌  base_functions.sh not found. Exiting..."
+    echo "❌  base_functions.sh not found. Cannot continue."
+    echo "Exiting..."
     exit 1  # Terminate the script
 else
     echo "Sourcing base_functions.sh..."
     . ./base_functions.sh     # Source the base functions
 fi
 
-if [ ! -f ./uninstall/uninstall_docker.sh ] > /dev/null; then
-    echo "❌  uninstall_docker.sh not found. Exiting..."
-    exit 1  # Terminate the script
+if [ ! -f ./uninstall_docker.sh ] > /dev/null; then
+    echo "❌  uninstall_docker.sh not found."
+    echo "Should we continue without uninstalling Docker? [y/N]: "
+    read -r confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Exiting..."
+        exit 1  # Terminate the script
+    fi
 else
     echo "Sourcing uninstall_docker.sh..."
-    . ./uninstall/uninstall_docker.sh     # Source the uninstall_docker.sh
+    . ./docker_uninstall.sh     # Source the uninstall_docker.sh
 fi
 
 clear                       # Clear the screen
