@@ -51,7 +51,6 @@ if [ ! -f ./base_functions.sh ] > /dev/null; then
     echo "Exiting..."
     exit 1  # Terminate the script
 else
-    echo "Sourcing base_functions.sh..."
     . ./base_functions.sh     # Source the base functions
 fi
 
@@ -64,7 +63,6 @@ if [ ! -f ./docker_uninstall.sh ] > /dev/null; then
         exit 1  # Terminate the script
     fi
 else
-    echo "Sourcing uninstall_docker.sh..."
     . ./docker_uninstall.sh     # Source the uninstall_docker.sh
 fi
 
