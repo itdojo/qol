@@ -14,7 +14,6 @@ uninstall_docker() {
             echo "Docker removal cancelled."
             echo ""
             return 0 
-        fi
         else
             echo "Stopping all running Docker containers..."
             docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
@@ -53,6 +52,7 @@ uninstall_docker() {
             sudo rm -rf /var/run/docker.sock                     # Remove Docker socket
             echo "Docker has been uninstalled."
         fi
+    fi
     echo "Docker is not installed."
 }
 
