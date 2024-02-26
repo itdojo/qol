@@ -1,6 +1,9 @@
 #!/bin/bash
 
-#
+# This script installs Docker on a Linux system. It also adds the current user to the docker group.
+# It has been successfully tested on Ubuntu, PoP!_OS, Kali, Ubuntu MATE, and Raspberry Pi OS.
+# It does not work on Mint 221.3 (Cinnamon).  I do not use that OS on the regular, so I have not
+# too much into why.
 if [ ! -f ./base_functions.sh ] > /dev/null; then
     echo "❌  base_functions.sh not found. Cannot continue."
     echo "Exiting..."
@@ -80,7 +83,7 @@ else
     fstring "🔑  Adding Docker's GPG key... " "section"
     install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg # Remove any existing Docker GPG key
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor --output /etc/apt/keyrings/docker.gpg
     chmod a+r /etc/apt/keyrings/docker.gpg
     check_status "Checking Result for Adding Docker's GPG key" $?
 
