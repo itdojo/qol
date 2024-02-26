@@ -2,63 +2,75 @@
 
 uninstall_docker() {
     if ! command -v apt > /dev/null; then
-        echo "❌  Cannot uninstall Docker. apt package manager not found."
-        exit 1  # Terminate the script
+        printf "❌  Cannot uninstall Docker. apt package manager not found.\n" >&2
+        return 1
     fi
+
     if command -v docker > /dev/null; then
-        fstring "Docker is already installed." "warning"
-        echo "⚠️  This script will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
-        echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
-        read -p "Do you really want to completely remote Docker? [y/n/q]: " confirm
-        if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-            echo "Docker removal cancelled."
-            echo ""
-            return 0 
-        elif [[ "$confirm" =~ ^[Qq]$ ]]; then
-            echo "Exiting..."
-            return 1  # Terminate the script
-        else
-            echo "Stopping all running Docker containers..."
-            docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
-            echo "Removing all Docker containers..."
-            docker rm "$(docker ps -aq)" 2>/dev/null      # Remove all Docker containers
-            echo "Removing all Docker images..."
-            docker rmi "$(docker images -q)" 2>/dev/null  # Remove all Docker images
-            echo "Removing all Docker volumes..."
-            docker volume rm "$(docker volume ls -q)" 2>/dev/null  # Remove all Docker volumes
-            echo "Removing all Docker networks..."
-            docker network rm "$(docker network ls -q)" 2>/dev/null  # Remove all Docker networks
-            echo "Removing all Docker plugins..."
-            docker plugin rm "$(docker plugin ls -q)" 2>/dev/null  # Remove all Docker plugins
-            echo "Note: This does not remove Docker Swarm services, nodes, or secrets."
-            echo "Uninstalling Docker..."
-            sudo apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
-            if command -v docker-desktop > /dev/null; then
-                # Uninstall Docker Desktop
-                echo "Uninstalling Docker Desktop..."
-                sudo apt purge -y docker-desktop
-                sudo apt autoremove -y --purge docker-desktop
-            fi
-            if command -v docker-compose > /dev/null; then
-                # Uninstall Docker Compose
-                echo "Uninstalling Docker Compose..."
-                sudo apt purge -y docker-compose
-                sudo apt autoremove -y --purge docker-compose
-            fi
-            sudo apt autoremove -y --purge docker-engine docker docker.io docker-ce  
-            sudo rm -rf /var/lib/docker /var/lib/containerd      # Remove Docker storage directories
-            sudo rm -rf /etc/docker                              # Remove Docker config files
-            sudo rm -rf ~/.docker                                # Remove Docker user directory
-            if getent group docker > /dev/null; then
-                sudo groupdel docker                             # Remove Docker group
-            fi
-            sudo rm -rf /var/run/docker.sock                     # Remove Docker socket
-            echo "Docker has been uninstalled."
-        fi
+        printf "⚠️  This script will remove Docker and all associated data. You cannot undo this action.\n" >&2
+        read -p "Do you really want to completely remove Docker? [y/n/q]: " confirm
+
+        case "$confirm" in
+            [Yy])
+                printf "Removing Docker in 5 seconds. Press CTRL-C to cancel...\n"
+                sleep 5
+                printf "Stopping all running Docker containers...\n"
+                docker stop $(docker ps -aq) 2>/dev/null    # Stop all running containers
+                printf "Removing all Docker containers...\n"
+                docker rm $(docker ps -aq) 2>/dev/null      # Remove all Docker containers
+                printf "Removing all Docker images...\n"
+                docker rmi $(docker images -q) 2>/dev/null  # Remove all Docker images
+                printf "Removing all Docker volumes...\n"
+                docker volume rm $(docker volume ls -q) 2>/dev/null  # Remove all Docker volumes
+                printf "Removing all Docker networks...\n"
+                docker network rm $(docker network ls -q) 2>/dev/null  # Remove all Docker networks
+                printf "Removing all Docker plugins...\n"
+                docker plugin rm $(docker plugin ls -q) 2>/dev/null  # Remove all Docker plugins
+                printf "Note: This does not remove Docker Swarm services, nodes, or secrets.\n"
+                printf "Uninstalling Docker...\n"
+                sudo apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
+                sudo apt autoremove -y --purge
+                ;;
+            [Nn])
+                printf "Docker removal cancelled. Continuing "${0}" execution...\n"
+                sleep 3
+                return 0
+                ;;
+            [Qq])
+                printf "Terminating the script...\n" >&2
+                if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
+                    if [[ -n "$ZSH_VERSION" ]]; then
+                        kill -s TERM "$$"
+                    else
+                        kill -s TERM $$
+                    fi
+                else
+                    exit 1
+                fi
+                ;;
+            *)
+                printf "Invalid input. Exiting...\n" >&2
+                return 2
+                ;;
+        esac
+
+        printf "Docker has been completely removed.\n"
+    else
+        printf "Docker is not installed.\n"
     fi
-    echo ""
-    echo "Docker is not installed."
-    echo ""
 }
 
-source ./base_functions.sh
+# Check if base_functions.sh is being sourced
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # The script is being run directly
+    if ! source ./base_functions.sh 2>/dev/null; then
+        printf "Error: base_functions.sh not found or contains errors.\n" >&2
+        exit 1
+    fi
+
+    uninstall_docker
+    exit $?
+else
+    # The script is being sourced
+    echo "uninstall_docker function is now available for use."
+fi
