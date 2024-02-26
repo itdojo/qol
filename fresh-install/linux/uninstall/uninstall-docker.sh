@@ -1,4 +1,5 @@
 #!/bin/bash
+
 uninstall_docker() {
     if ! command -v apt > /dev/null; then
         echo "❌  Cannot uninstall Docker. apt package manager not found."
@@ -54,5 +55,7 @@ uninstall_docker() {
     fi
     echo "Docker is not installed."
 }
+
+. ../base_functions.sh
 
 uninstall_docker
