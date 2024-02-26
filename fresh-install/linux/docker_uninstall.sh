@@ -9,11 +9,14 @@ uninstall_docker() {
         fstring "Docker is already installed." "title"
         echo "⚠️  This script will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
         echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
-        read -p "Do you really want to completely remote Docker? [y/N]: " confirm
+        read -p "Do you really want to completely remote Docker? [y/n/q]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
             echo "Docker removal cancelled."
             echo ""
             return 0 
+        elif [[ "$confirm" =~ ^[Qq]$ ]]; then
+            echo "Exiting..."
+            exit 1  # Terminate the script
         else
             echo "Stopping all running Docker containers..."
             docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
