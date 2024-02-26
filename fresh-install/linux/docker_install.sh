@@ -9,7 +9,7 @@ if [ ! -f ./base_functions.sh ] > /dev/null; then
     echo "Exiting..."
     exit 1  # Terminate the script
 else
-    . ./base_functions.sh     # Source the base functions
+    source ./base_functions.sh     # Source the base functions
 fi
 
 if [ ! -f ./docker_uninstall.sh ] > /dev/null; then
@@ -91,8 +91,7 @@ else
     fstring "Adding Docker repository to apt sources... " "section"
     echo \
         "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-        $VERSION_CODENAME stable" |
-        tee /etc/apt/sources.list.d/docker.list >/dev/null
+        $VERSION_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
         check_status "Checking Result for Adding Docker repository to apt sources" $?
 
     update_repo
