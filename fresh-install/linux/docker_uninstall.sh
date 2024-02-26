@@ -16,7 +16,7 @@ uninstall_docker() {
             return 0 
         elif [[ "$confirm" =~ ^[Qq]$ ]]; then
             echo "Exiting..."
-            exit 1  # Terminate the script
+            return 1  # Terminate the script
         else
             echo "Stopping all running Docker containers..."
             docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
@@ -62,8 +62,3 @@ uninstall_docker() {
 }
 
 source ./base_functions.sh
-
-echo ""
-as_root
-check_if_linux
-uninstall_docker
