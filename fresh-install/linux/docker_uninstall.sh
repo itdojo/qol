@@ -28,8 +28,8 @@ uninstall_docker() {
                 docker plugin rm $(docker plugin ls -q) 2>/dev/null  # Remove all Docker plugins
                 printf "Note: This does not remove Docker Swarm services, nodes, or secrets.\n"
                 printf "Uninstalling Docker...\n"
-                sudo apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
-                sudo apt autoremove -y --purge
+                apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
+                apt autoremove -y --purge
                 ;;
             [Nn])
                 printf "Docker removal cancelled. Continuing "${0}" execution...\n"
