@@ -6,7 +6,7 @@ uninstall_docker() {
         exit 1  # Terminate the script
     fi
     if command -v docker > /dev/null; then
-        fstring "Docker is already installed." "title"
+        fstring "Docker is already installed." "warning"
         echo "⚠️  This script will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
         echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
         read -p "Do you really want to completely remote Docker? [y/n/q]: " confirm
@@ -63,6 +63,7 @@ uninstall_docker() {
 
 source ./base_functions.sh
 
+echo ""
 as_root
 check_if_linux
 uninstall_docker
