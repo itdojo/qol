@@ -63,7 +63,7 @@ if [ ! -f ./docker_uninstall.sh ] > /dev/null; then
         exit 1  # Terminate the script
     fi
 else
-    . ./docker_uninstall.sh     # Source the uninstall_docker.sh
+    source ./docker_uninstall.sh     # Source the uninstall_docker.sh
 fi
 
 clear                       # Clear the screen
@@ -73,22 +73,6 @@ trap handle_ctrl_c SIGINT   # Gracefully handle CTRL-C
 
 fstring "🐳  DOCKER INSTALLER FOR LINUX" "title"
 printline dentistry
-
-# Check if Docker is already installed
-# if command -v docker > /dev/null; then
-#     echo "Docker is already installed."
-#     echo "Reinstalling will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
-#     echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
-#     read -p "Do you want to reinstall Docker? [y/N]: " confirm
-#     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-#         echo "Docker reinstall cancelled. Exiting..."
-#         echo ""
-#         exit 0  # Terminate the script
-#     else
-#         echo "Removing Existing Docker Installation... "
-#         uninstall_docker
-#     fi
-# fi
 
 if ! command -v curl > /dev/null; then
     echo "Installing curl..."
