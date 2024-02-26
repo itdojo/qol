@@ -68,6 +68,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
         exit 1
     fi
 
+    as_root
     uninstall_docker
     exit $?
 else
