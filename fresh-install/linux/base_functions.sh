@@ -1,4 +1,3 @@
-#!/bin/bash
 # This script is intended to be sourced in other scripts
 # Usgage: source base_functions.sh
 #

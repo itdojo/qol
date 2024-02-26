@@ -20,20 +20,20 @@ uninstall_docker() {
     docker plugin rm "$(docker plugin ls -q)" 2>/dev/null  # Remove all Docker plugins
     echo "Note: This does not remove Docker Swarm services, nodes, or secrets."
     echo "Uninstalling Docker..."
-    sudo apt-get purge -y docker-engine docker docker.io docker-ce docker-ce-cli
+    sudo apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
     if command -v docker-desktop > /dev/null; then
         # Uninstall Docker Desktop
         echo "Uninstalling Docker Desktop..."
-        sudo apt-get purge -y docker-desktop
-        sudo apt-get autoremove -y --purge docker-desktop
+        sudo apt purge -y docker-desktop
+        sudo apt autoremove -y --purge docker-desktop
     fi
     if command -v docker-compose > /dev/null; then
         # Uninstall Docker Compose
         echo "Uninstalling Docker Compose..."
-        sudo apt-get purge -y docker-compose
-        sudo apt-get autoremove -y --purge docker-compose
+        sudo apt purge -y docker-compose
+        sudo apt autoremove -y --purge docker-compose
     fi
-    sudo apt-get autoremove -y --purge docker-engine docker docker.io docker-ce  
+    sudo apt autoremove -y --purge docker-engine docker docker.io docker-ce  
 
     sudo rm -rf /var/lib/docker /var/lib/containerd      # Remove Docker storage directories
     sudo rm -rf /etc/docker                              # Remove Docker config files
@@ -46,9 +46,15 @@ uninstall_docker() {
     echo "Docker has been uninstalled."
 }
 
-. base_functions2.sh        # Source the base functions
+if [ ! -f ./base_functions.sh ] > /dev/null; then
+    echo "❌  base_functions.sh not found. Exiting..."
+    exit 1  # Terminate the script
+else
+    echo "Sourcing base_functions.sh..."
+    . ./base_functions.sh     # Source the base functions
+fi
 clear                       # Clear the screen
-as_root                  # Confirm running as root
+as_root                     # Confirm running as root
 check_if_linux              # Confirm running on Linux
 trap handle_ctrl_c SIGINT   # Gracefully handle CTRL-C
 
