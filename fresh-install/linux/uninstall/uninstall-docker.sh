@@ -7,11 +7,11 @@ uninstall_docker() {
     fi
     if command -v docker > /dev/null; then
         echo "Docker is already installed."
-        echo "Reinstalling will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
+        echo "⚠️ This script will remove Docker and $(fstring "all containers and images" "normal" "bold" "red")."
         echo "You $(fstring "cannot" "normal" "normal" "normal" "underline") undo this action."
-        read -p "Do you want to reinstall Docker? [y/N]: " confirm
+        read -p "Do you really want to completely remote Docker? [y/N]: " confirm
         if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-            echo "Docker reinstall cancelled. Exiting..."
+            echo "Docker removal cancelled."
             echo ""
             return 0 
         fi
@@ -57,5 +57,7 @@ uninstall_docker() {
 }
 
 source ../base_functions.sh
+
+as_root
 
 uninstall_docker
