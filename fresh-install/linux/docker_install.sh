@@ -55,7 +55,7 @@ else
     . ./base_functions.sh     # Source the base functions
 fi
 
-if [ ! -f ./uninstall_docker.sh ] > /dev/null; then
+if [ ! -f ./docker_uninstall.sh ] > /dev/null; then
     echo "❌  uninstall_docker.sh not found."
     echo "Should we continue without uninstalling Docker? [y/N]: "
     read -r confirm
