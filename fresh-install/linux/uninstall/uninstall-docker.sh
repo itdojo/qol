@@ -56,6 +56,6 @@ uninstall_docker() {
     echo "Docker is not installed."
 }
 
-. ../base_functions.sh
+source ../base_functions.sh
 
 uninstall_docker
