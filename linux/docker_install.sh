@@ -51,7 +51,7 @@ fi
 
 # Source the os-release file
 if [ -f /etc/os-release ]; then
-    . /etc/os-release
+    source /etc/os-release
     printf "%s\n" "OS Version: $PRETTY_NAME ($VERSION_CODENAME)"
 fi
 
