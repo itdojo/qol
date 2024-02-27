@@ -15,24 +15,24 @@ uninstall_docker() {
                 printf "Removing Docker in 5 seconds. Press CTRL-C to cancel...\n"
                 sleep 5
                 printf "Stopping all running Docker containers...\n"
-                docker stop $(docker ps -aq) 2>/dev/null    # Stop all running containers
+                docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
                 printf "Removing all Docker containers...\n"
-                docker rm $(docker ps -aq) 2>/dev/null      # Remove all Docker containers
+                docker rm "$(docker ps -aq)" 2>/dev/null      # Remove all Docker containers
                 printf "Removing all Docker images...\n"
-                docker rmi $(docker images -q) 2>/dev/null  # Remove all Docker images
+                docker rmi "$(docker images -q)" 2>/dev/null  # Remove all Docker images
                 printf "Removing all Docker volumes...\n"
-                docker volume rm $(docker volume ls -q) 2>/dev/null  # Remove all Docker volumes
+                docker volume rm "$(docker volume ls -q)" 2>/dev/null  # Remove all Docker volumes
                 printf "Removing all Docker networks...\n"
-                docker network rm $(docker network ls -q) 2>/dev/null  # Remove all Docker networks
+                docker network rm "$(docker network ls -q)" 2>/dev/null  # Remove all Docker networks
                 printf "Removing all Docker plugins...\n"
-                docker plugin rm $(docker plugin ls -q) 2>/dev/null  # Remove all Docker plugins
+                docker plugin rm "$(docker plugin ls -q)" 2>/dev/null  # Remove all Docker plugins
                 printf "Note: This does not remove Docker Swarm services, nodes, or secrets.\n"
                 printf "Uninstalling Docker...\n"
                 apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
                 apt autoremove -y --purge
                 ;;
             [Nn])
-                printf "Docker removal cancelled. Continuing "${0}" execution...\n"
+                printf "%s\n" "Docker removal cancelled. Continuing ${0} execution..."
                 sleep 3
                 return 0
                 ;;
