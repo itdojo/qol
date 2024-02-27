@@ -7,7 +7,7 @@ uninstall_docker() {
     fi
 
     if command -v docker > /dev/null; then
-        printf "⚠️  This script will remove Docker and all associated data. You cannot undo this action.\n" >&2
+        printf "%s\n" "⚠️  You are about to completely remove Docker and all associated data. $(fstring "There is no undo." "normal" "bold" "red")\n" >&2
         read -p "Do you really want to completely remove Docker? [y/n/q]: " confirm
 
         case "$confirm" in
