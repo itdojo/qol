@@ -12,16 +12,16 @@ else
     source ./base_functions.sh     # Source the base functions
 fi
 
-if [ ! -f ./docker_uninstall.sh ] > /dev/null; then
-    echo "❌  uninstall_docker.sh not found."
-    echo "Should we continue without uninstalling Docker? [y/N]: "
-    read -r confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Exiting..."
-        exit 1  # Terminate the script
+if [ command -v docker > /dev/null ]; then
+    echo "Docker is already installed."
+    read -p "Do you want to uninstall existing Docker install first? [y/N]: " -r confirm
+    if [[ $confirm =~ ^[Yy]$ ]]; then
+        source ./docker_uninstall.sh  # Source the docker_uninstall.sh
+        uninstall_docker
+    else
+        echo "Continuing with Docker installation..."
+        return 0
     fi
-else
-    source ./docker_uninstall.sh     # Source the uninstall_docker.sh
 fi
 
 clear                       # Clear the screen
@@ -66,7 +66,7 @@ elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
     # This is Kali
     printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
     fstring "Installing Docker for $PRETTY_NAME... " "section"
-    printf "If prompted to overwrite Docker gpg key, select 'Yes'.\n"
+    printf "❓  If prompted to overwrite Docker gpg key, select 'Yes'.\n"
     printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker-ce.list
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
     update_repo
