@@ -12,7 +12,7 @@ else
     source ./base_functions.sh     # Source the base functions
 fi
 
-if [ command -v docker > /dev/null ]; then
+if command -v docker > /dev/null; then
     echo "Docker is already installed."
     read -p "Do you want to uninstall existing Docker install first? [y/N]: " -r confirm
     if [[ $confirm =~ ^[Yy]$ ]]; then
