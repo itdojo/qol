@@ -17,7 +17,7 @@ if command -v docker > /dev/null; then
     read -p "Do you want to continue with the installation? [y/N]: " -r confirm
     case $confirm in
         [Yy])
-            echo "Continuing with Docker installation..."
+            echo ""
             ;;
         *)
             echo "Exiting..."
