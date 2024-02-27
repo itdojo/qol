@@ -12,32 +12,32 @@ uninstall_docker() {
 
         case "$confirm" in
             [Yy])
-                printf "Removing Docker in 5 seconds. Press CTRL-C to cancel...\n"
+                printf "%s\n" "Removing Docker in 5 seconds. Press CTRL-C to cancel..."
                 sleep 5
                 printf "%s\n" "Stopping all running Docker containers..."
-                docker stop "$(docker ps -aq)" 2>/dev/null    # Stop all running containers
-                printf %s\n" "Removing all Docker containers..."
-                docker rm "$(docker ps -aq)" 2>/dev/null      # Remove all Docker containers
-                printf %s\n" "Removing all Docker images..."
-                docker rmi "$(docker images -q)" 2>/dev/null  # Remove all Docker images
-                printf %s\n" "Removing all Docker volumes..."
-                docker volume rm "$(docker volume ls -q)" 2>/dev/null  # Remove all Docker volumes
-                printf %s\n" "Removing all Docker networks..."
-                docker network rm "$(docker network ls -q)" 2>/dev/null  # Remove all Docker networks
-                printf %s\n" "Removing all Docker plugins..."
-                docker plugin rm "$(docker plugin ls -q)" 2>/dev/null  # Remove all Docker plugins
-                printf %s\n" "Note: This does not remove Docker Swarm services, nodes, or secrets.\n"
-                printf %s\n" "Uninstalling Docker..."
+                docker stop "$(docker ps -aq)" 2>/dev/null                      # Stop all running containers
+                printf "%s\n" "Removing all Docker containers..."
+                docker rm "$(docker ps -aq)" 2>/dev/null                        # Remove all Docker containers
+                printf "%s\n" "Removing all Docker images..."
+                docker rmi "$(docker images -q)" 2>/dev/null                    # Remove all Docker images
+                printf "%s\n" "Removing all Docker volumes..."
+                docker volume rm "$(docker volume ls -q)" 2>/dev/null           # Remove all Docker volumes
+                printf "%s\n" "Removing all Docker networks..."
+                docker network rm "$(docker network ls -q)" 2>/dev/null         # Remove all Docker networks
+                printf "%s\n" "Removing all Docker plugins..."
+                docker plugin rm "$(docker plugin ls -q)" 2>/dev/null           # Remove all Docker plugins
+                printf "%s\n" "Note: This does not remove Docker Swarm services, nodes, or secrets."
+                printf "%s\n" "Uninstalling Docker..."
                 apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli
                 apt autoremove -y --purge
                 ;;
             [Nn])
-                printf "%s\n" "Docker removal cancelled. Continuing ${0} execution..."
-                sleep 3
+                printf "%s\n" "Docker uninstall cancelled. Continuing ${0} execution..."
+                sleep 2
                 return 0
                 ;;
             [Qq])
-                printf "Terminating the script...\n" >&2
+                printf "%s\n" "Terminating the script..." >&2
                 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
                     if [[ -n "$ZSH_VERSION" ]]; then
                         kill -s TERM "$$"
@@ -71,8 +71,4 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
     as_root
     uninstall_docker
     exit $?
-else
-    # The script is being sourced
-    #echo "uninstall_docker function is now available for use."
-    echo ""
 fi

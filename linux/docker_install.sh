@@ -2,14 +2,19 @@
 
 # This script installs Docker on a Linux system. It also adds the current user to the docker group.
 # It has been successfully tested on Ubuntu, PoP!_OS, Kali, Ubuntu MATE, and Raspberry Pi OS.
-# It does not work on Mint 221.3 (Cinnamon).  I do not use that OS on the regular, so I have not
-# too much into why.
+# It does not work on Mint 21.3 (Cinnamon).  
+
+# This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
+# The base_functions.sh file should be available in the same directory as this script.
+# If not, you can get it from https://github.com/itdojo/qol.
+
 if [ ! -f ./base_functions.sh ] > /dev/null; then
     echo "❌  base_functions.sh not found. Cannot continue."
     echo "Exiting..."
     exit 1  # Terminate the script
 else
-    source ./base_functions.sh     # Source the base functions
+    SCRIPT_DIR=$(dirname "$(realpath "$0")")    # Get the directory the script is located in
+    source "${SCRIPT_DIR}/base_functions.sh"    # Source the base functions
 fi
 
 if command -v docker > /dev/null; then
@@ -26,7 +31,7 @@ if command -v docker > /dev/null; then
     esac
     read -p "Do you want to uninstall existing Docker install first? [y/N]: " -r confirm
     if [[ $confirm =~ ^[Yy]$ ]]; then
-        source ./docker_uninstall.sh  # Source the docker_uninstall.sh
+        source "${SCRIPT_DIR}/docker_uninstall.sh"  # Source the docker_uninstall.sh
         uninstall_docker
     else
         echo "Continuing with Docker installation..."
