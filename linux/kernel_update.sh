@@ -38,10 +38,10 @@ if [ -n "$model" ]; then
     rpi-update
     check_status "Checking Result of Raspberry Pi Kernel Update" $?
     fstring "Review the Results Above.  Reboot to load any changes." "warning"
-elif [ -n $(grep Kali /etc/os-release*) ]; then
+elif [ -n "$(grep Kali /etc/os-release*)" ]; then
     printf "%s\n" "👾  I am $(fstring "Kali Linux" "normal" "bold" "blue")."
-    printf %s\n "$(fstring "Kali" "normal" "normal" "blue") requires a dist-upgrade and full-upgrade to update to latest kernel.  
-    read -p Continue? [y/n]: " confirm
+    printf "%s\n" "$(fstring "Kali" "normal" "normal" "blue")" requires a dist-upgrade and full-upgrade to update to latest kernel.  
+    read -p "Proceed with the update? (y/n): " confirm
     apt -dist-upgrade -y && apt full-upgrade -y
     case $confirm in
         [Yy])
