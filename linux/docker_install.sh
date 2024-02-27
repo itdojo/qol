@@ -13,7 +13,17 @@ else
 fi
 
 if command -v docker > /dev/null; then
-    echo "Docker is already installed."
+    echo "Docker is already installed ($(docker --version))."
+    read -p "Do you want to continue with the installation? [y/N]: " -r confirm
+    case $confirm in
+        [Yy])
+            echo "Continuing with Docker installation..."
+            ;;
+        *)
+            echo "Exiting..."
+            exit 0
+            ;;
+    esac
     read -p "Do you want to uninstall existing Docker install first? [y/N]: " -r confirm
     if [[ $confirm =~ ^[Yy]$ ]]; then
         source ./docker_uninstall.sh  # Source the docker_uninstall.sh
