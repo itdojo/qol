@@ -58,6 +58,18 @@ format_font() {
     echo -e "\033[${weight_code};${color_code}m${text}${reset}"
 }
 
+check_for_wget() {
+    if ! command -v wget &>/dev/null; then
+        format_font "#️⃣  Installing wget..."
+        if [[ "$os" = "Darwin" ]]; then
+            brew install wget
+        else
+            sudo apt install -y wget
+        fi
+    fi
+    format_font "✅  wget is installed."
+}
+
 check_for_zsh() {
     if ! command -v zsh &>/dev/null; then
         format_font "#️⃣  Installing Zsh..."
@@ -82,6 +94,18 @@ check_for_git() {
     format_font "✅  Git is installed."
 }
 
+check_for_curl() {
+    if ! command -v curl &>/dev/null; then
+        format_font "#️⃣  Installing curl..."
+        if [[ "$os" = "Darwin" ]]; then
+            brew install curl
+        else
+            sudo apt install -y curl
+        fi
+    fi
+    format_font "✅  curl is installed."
+}
+
 check_for_oh_my_zsh() {
     if [[ ! -d ~/.oh-my-zsh ]]; then
         format_font "#️⃣  Installing Oh My Zsh..."
@@ -100,9 +124,10 @@ download_fonts() {
     set_fonts_dir
     format_font "#️⃣  Downloading Fonts..."
     for font in "${fonts_to_get[@]}"; do
-        spaced_font=$(echo "$font" | sed 's|%20| |g')
-        wget "$font_url""$font" -O "$fonts_dir""${spaced_font-}"
-    done
+        # spaced_font=$(echo "$font" | sed 's|%20| |g')
+        # wget "$font_url""$font" -O "$fonts_dir""${spaced_font-}"
+        wget "$font" -O "fonts_dir"
+        done
     format_font "✅  Fonts are installed."
 }
 
@@ -148,18 +173,29 @@ check_for_root
 
 os=$(uname -s)
 
-fonts_to_get=(
-    "MesloLGS%20NF%20Regular.ttf"
-    "MesloLGS%20NF%20Bold.ttf"
-    "MesloLGS%20NF%20Italic.ttf"
-    "MesloLGS%20NF%20Bold%20Italic.ttf"
-)
+fonts_to_get=(  
+    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf
+    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf
+    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf
+    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf
+)   
+
+
+# fonts_to_get=(
+#     "MesloLGS%20NF%20Regular.ttf"
+#     "MesloLGS%20NF%20Bold.ttf"
+#     "MesloLGS%20NF%20Italic.ttf"
+#     "MesloLGS%20NF%20Bold%20Italic.ttf"
+# )
 
 font_url="https://github.com/romkatv/powerlevel10k-media/raw/master/"
 plugins=(zsh-autosuggestions zsh-syntax-highlighting zsh-completions)
 
+fonts_dir=""
 set_fonts_dir
 check_for_git
+check_for_wget
+check_for_curl
 check_for_zsh
 check_for_oh_my_zsh
 install_nerd_fonts
@@ -181,12 +217,6 @@ case "$os" in
         format_font "✅  Powerlevel10k is installed."
         ;;
     Linux)
-        if ! command -v curl &> /dev/null
-        then
-            format_font "#️⃣  Installing curl..."
-            sudo apt install -y curl
-            format_font "✅  curl is installed."
-        fi
         local_dir="/usr/share/fonts/truetype/MesloLGS-NF/"
         download_fonts $local_dir
         format_font "#️⃣  Updating Font Cache..."
