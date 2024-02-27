@@ -63,8 +63,10 @@ if [ -n "$model" ]; then
     curl -sSL https://get.docker.com | sh
     check_status "$(fstring "🥧  Raspberry Pi" "normale" "normal" "red") Docker installation"  $?
 elif [ "$VERSION_CODENAME" = "kali-rolling" ]; then
+    # This is Kali
     printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
     fstring "Installing Docker for $PRETTY_NAME... " "section"
+    printf "If prompted to overwrite Docker gpg key, select 'Yes'.\n"
     printf '%s\n' "deb https://download.docker.com/linux/debian bullseye stable" | tee /etc/apt/sources.list.d/docker-ce.list
     curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/trusted.gpg.d/docker-ce-archive-keyring.gpg
     update_repo

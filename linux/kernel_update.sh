@@ -40,9 +40,8 @@ if [ -n "$model" ]; then
     fstring "Review the Results Above.  Reboot to load any changes." "warning"
 elif [ -n "$(grep Kali /etc/os-release*)" ]; then
     printf "%s\n" "👾  I am $(fstring "Kali Linux" "normal" "bold" "blue")."
-    printf "%s\n" "$(fstring "Kali" "normal" "normal" "blue")" requires a dist-upgrade and full-upgrade to update to latest kernel.  
+    printf "%s\n" "$(fstring "Kali" "normal" "normal" "blue") requires a dist-upgrade and full-upgrade to update to latest kernel."  
     read -p "Proceed with the update? (y/n): " confirm
-    apt -dist-upgrade -y && apt full-upgrade -y
     case $confirm in
         [Yy])
             printf "Updating $(fstring "Kali" "normal" "bold" "blue") to latest kernel..."
@@ -56,7 +55,7 @@ elif [ -n "$(grep Kali /etc/os-release*)" ]; then
             exit 0
             ;;
         *)
-            printf "Invalid input. Terminating the script..."
+            printf "Invalid input. Exiting."
             exit 1
             ;;   
     esac
