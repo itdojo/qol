@@ -30,11 +30,13 @@ uninstall_docker() {
                 printf "%s\n" "Uninstalling Docker..."
                 apt purge -y docker-engine docker docker.io docker-ce docker-ce-cli containerd.io
                 apt autoremove -y --purge
-                rm -rf /var/lib/docker
+                rm -rf /var/lib/containerd
+                rm -rf /var/run/docker*
                 rm -rf /etc/docker
                 rm -rf /var/run/docker.sock
                 rm -rf /usr/local/bin/docker-compose
                 rm -rf /var/lib/containerd
+                rm -rf /var/run/"*docker*"
                 ;;
             [Nn])
                 printf "%s\n" "Docker uninstall cancelled. Continuing ${0} execution..."
