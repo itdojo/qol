@@ -12,7 +12,7 @@ set -e
 # DNS server
 DNS_SERVER="1.1.1.1"
 
-# Define a website to check connectivity with
+# Define a website to name resolution
 SITE="www.google.com"
 
 # Can you ping DNS?
