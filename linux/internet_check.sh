@@ -40,4 +40,8 @@ if [[ $? -ne 0 ]]; then  # 1st DNS query failed
     exit 1
 fi
 
+<<<<<<< HEAD
 printf "%s\n" " ✅ Internet   ✅ DNS"
+=======
+printf "%s\n" " ✅ Internet   ✅ DNS"
+>>>>>>> c3b4621 (Added internet_check.sh and wifi_check.sh)
