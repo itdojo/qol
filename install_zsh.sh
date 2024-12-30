@@ -135,12 +135,14 @@ install_nerd_fonts() {
     format_font "#️⃣  Installing Nerd Fonts..."
     if [[ "$os" = "Darwin" ]]; then
         brew tap homebrew/cask-fonts
-        brew install font-hack-nerd-font
+        #brew install font-hack-nerd-font
+        brew install --cask font-meslo-lg-nerd-font
     else
         cd "$HOME"
         git clone --depth=1 https://github.com/ryanoasis/nerd-fonts.git
         cd nerd-fonts || exit
-        ./install.sh
+        # ./install.sh Meslo, FiraCode
+        ./install.sh Meslo, FiraCode
         cd "$HOME" && rm -rf nerd-fonts
     fi 
     format_font "✅  Nerd Fonts are installed."
@@ -179,14 +181,6 @@ fonts_to_get=(
     https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf
     https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf
 )   
-
-
-# fonts_to_get=(
-#     "MesloLGS%20NF%20Regular.ttf"
-#     "MesloLGS%20NF%20Bold.ttf"
-#     "MesloLGS%20NF%20Italic.ttf"
-#     "MesloLGS%20NF%20Bold%20Italic.ttf"
-# )
 
 font_url="https://github.com/romkatv/powerlevel10k-media/raw/master/"
 plugins=(zsh-autosuggestions zsh-syntax-highlighting zsh-completions)
