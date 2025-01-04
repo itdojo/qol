@@ -144,6 +144,7 @@ fstring() {
         section)  linetype="solid";     string="🔸  $string"; font_weight="bold"; font_color="yellow" ;;
         warning)  linetype="solid";     string="⚠️  $string"; font_weight="bold"; font_color="red" ;;
         success)  linetype="solid";     string="✅  $string"; font_weight="bold"; font_color="green" ;;
+        install)  linetype="solid";     string="📦  $string"; font_weight="bold"; font_color="yellow" ;;
         normal)   linetype="" ;;  # No line type
         *)        linetype="" ;;  # No line type
     esac
