@@ -60,7 +60,7 @@ format_font() {
 
 check_for_wget() {
     if ! command -v wget &>/dev/null; then
-        format_font "#️⃣  Installing wget..."
+        format_font "📦  Installing wget..."
         if [[ "$os" = "Darwin" ]]; then
             brew install wget
         else
@@ -72,7 +72,7 @@ check_for_wget() {
 
 check_for_zsh() {
     if ! command -v zsh &>/dev/null; then
-        format_font "#️⃣  Installing Zsh..."
+        format_font "📦  Installing Zsh..."
         if [[ "$os" = "Darwin" ]]; then
             brew install zsh
         else
@@ -84,7 +84,7 @@ check_for_zsh() {
 
 check_for_git() {
     if ! command -v git &>/dev/null; then
-        format_font "#️⃣  Installing Git..."
+        format_font "📦  Installing Git..."
         if [[ "$os" = "Darwin" ]]; then
             brew install git
         else
@@ -96,7 +96,7 @@ check_for_git() {
 
 check_for_curl() {
     if ! command -v curl &>/dev/null; then
-        format_font "#️⃣  Installing curl..."
+        format_font "📦  Installing curl..."
         if [[ "$os" = "Darwin" ]]; then
             brew install curl
         else
@@ -108,7 +108,7 @@ check_for_curl() {
 
 check_for_oh_my_zsh() {
     if [[ ! -d ~/.oh-my-zsh ]]; then
-        format_font "#️⃣  Installing Oh My Zsh..."
+        format_font "📦  Installing Oh My Zsh..."
         echo "y" | sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
     fi
     format_font "✅  Oh-My-Zsh is installed."
@@ -132,7 +132,7 @@ download_fonts() {
 }
 
 install_nerd_fonts() {
-    format_font "#️⃣  Installing Nerd Fonts..."
+    format_font "📦  Installing Nerd Fonts..."
     if [[ "$os" = "Darwin" ]]; then
         brew tap homebrew/cask-fonts
         #brew install font-hack-nerd-font
@@ -162,7 +162,7 @@ set_fonts_dir() {
 }
 
 install_zsh_plugins() {
-    format_font "#️⃣  Installing Zsh Plugins..."
+    format_font "📦  Installing Zsh Plugins..."
     for plugin in "${plugins[@]}"; do
         rm -rf "${ZSH_CUSTOM:-"$HOME"/.oh-my-zsh/custom}/plugins/$plugin"
         git clone "https://github.com/zsh-users/$plugin.git" "${ZSH_CUSTOM:-"$HOME"/.oh-my-zsh/custom}/plugins/$plugin"
@@ -198,12 +198,12 @@ case "$os" in
     Darwin)
         if ! command -v brew &> /dev/null
             then
-            format_font "#️⃣  Installing Homebrew..."
+            format_font "📦  Installing Homebrew..."
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         fi
         local_dir="$HOME/Library/Fonts/"
         download_fonts "$local_dir"
-        format_font "#️⃣  Installing Powerlevel10k..."
+        format_font "📦  Installing Powerlevel10k..."
         brew install powerlevel10k
         git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
         echo "source $(brew --prefix)/share/powerlevel10k/powerlevel10k.zsh-theme" >>~/.zshrc
@@ -215,7 +215,7 @@ case "$os" in
         download_fonts $local_dir
         format_font "#️⃣  Updating Font Cache..."
         cd && fc-cache -fv
-        format_font "#️⃣  Installing Powerlevel10k...."
+        format_font "📦  Installing Powerlevel10k...."
         git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
         format_font "✅  Powerlevel10k is installed."
         format_font "#️⃣  Changing default shell to Zsh. Your password is required."
