@@ -119,8 +119,8 @@ fstring() {
     #│ section │  light   │ yellow  │  blink     │
     #│ warning │          │ green   │  reverse   │
     #│ success │          │ blue    │  hidden    │
-    #│         │          │ indigo  │            │
-    #│         │          │ violet  │            │
+    #│ install │          │ indigo  │            │
+    #│ failure │          │ violet  │            │
     #│         │          │ white   │            │
     #│         │          │ black   │            │
     #⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺
