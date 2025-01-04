@@ -143,6 +143,7 @@ fstring() {
         title)    linetype="dentistry"; string="🔹  $string"; font_weight="bold"; font_color="blue" ;;
         section)  linetype="solid";     string="🔸  $string"; font_weight="bold"; font_color="yellow" ;;
         warning)  linetype="solid";     string="⚠️  $string"; font_weight="bold"; font_color="red" ;;
+        failure)  linetype="solid";     string="❌  $string"; font_weight="bold"; font_color="red" emphasis="blink" ;;
         success)  linetype="solid";     string="✅  $string"; font_weight="bold"; font_color="green" ;;
         install)  linetype="solid";     string="📦  $string"; font_weight="bold"; font_color="yellow" ;;
         normal)   linetype="" ;;  # No line type
