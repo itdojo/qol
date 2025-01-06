@@ -135,10 +135,6 @@ update_zshrc() {
 install_nerd_fonts() {
     format_font "📦  Installing Nerd Fonts..."
     if [[ "$os" = "Darwin" ]]; then
-        if [[ ! command -v brew ]]; then
-            format_font "📦  Installing Homebrew..."
-            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        fi
         brew install font-symbols-only-nerd-font font-meslo-lg-nerd-font font-meslo-for-powerlevel10k
     else
         cd "$HOME"
