@@ -124,9 +124,9 @@ download_fonts() {
     set_fonts_dir
     format_font "#️⃣  Downloading Fonts..."
     for font in "${fonts_to_get[@]}"; do
-        # spaced_font=$(echo "$font" | sed 's|%20| |g')
-        # wget "$font_url""$font" -O "$fonts_dir""${spaced_font-}"
-        sudo wget "$font" -O "fonts_dir"
+        spaced_font=$(echo "$font" | sed 's|%20| |g')
+        sudo wget "$font_url""$font" -O "$fonts_dir""${spaced_font-}"
+        # sudo wget "$font" -O "fonts_dir"
         done
     format_font "✅  Fonts are installed."
 }

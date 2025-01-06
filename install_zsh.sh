@@ -120,46 +120,53 @@ update_zshrc() {
 }
 
 
-download_fonts() {
-    set_fonts_dir
-    format_font "#️⃣  Downloading Fonts..."
-    for font in "${fonts_to_get[@]}"; do
-        # spaced_font=$(echo "$font" | sed 's|%20| |g')
-        # wget "$font_url""$font" -O "$fonts_dir""${spaced_font-}"
-        wget "$font" -O "fonts_dir"
-        done
-    format_font "✅  Fonts are installed."
-}
+# download_fonts() {
+#     set_fonts_dir
+#     format_font "#️⃣  Downloading Fonts..."
+#     for font in "${fonts_to_get[@]}"; do
+#         # spaced_font=$(echo "$font" | sed 's|%20| |g')
+#         # wget "$font_url""$font" -O "$fonts_dir""${spaced_font-}"
+#         wget "$font" -O "fonts_dir"
+#         done
+#     format_font "✅  Fonts are installed."
+# }
+
 
 install_nerd_fonts() {
     format_font "📦  Installing Nerd Fonts..."
     if [[ "$os" = "Darwin" ]]; then
-        brew tap homebrew/cask-fonts
-        #brew install font-hack-nerd-font
-        brew install --cask font-meslo-lg-nerd-font
+        if [[ ! command -v brew ]]; then
+            format_font "📦  Installing Homebrew..."
+            /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        fi
+        brew install font-symbols-only-nerd-font font-meslo-lg-nerd-font font-meslo-for-powerlevel10k
     else
         cd "$HOME"
-        git clone --depth=1 https://github.com/ryanoasis/nerd-fonts.git
-        cd nerd-fonts || exit
-        # ./install.sh Meslo, FiraCode
-        ./install.sh Meslo, FiraCode
-        cd "$HOME" && rm -rf nerd-fonts
+        mkdir -p ~/.fonts
+        wget -q https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/Meslo.zip -O /tmp/Meslo.zip
+        wget -q https://github.com/ryanoasis/nerd-fonts/releases/download/v3.3.0/NerdFontsSymbolsOnly.zip -O /tmp/NerdFontsSymbolsOnly.zip
+        if [[ ! $(command -v unzip) ]]; then echo "📦  Installing unzip..." && sudo apt install unzip; fi
+        unzip -oq /tmp/Meslo.zip -d ~/.fonts/
+        unzip -oq /tmp/NerdFontsSymbolsOnly.zip -d ~/.fonts/
+        rm /tmp/Meslo.zip /tmp/NerdFontsSymbolsOnly.zip
+        if [[ ! $(command -v fc-cache) ]]; then echo "📦  Installing fontconfig..." && sudo apt install fontconfig; fi
+        sudo fc-cache -fv
     fi 
     format_font "✅  Nerd Fonts are installed."
 }
 
-set_fonts_dir() {
-    format_font "#️⃣  Setting Fonts Directory..."
-    if [[ "$os" = "Darwin" ]]; then
-        fonts_dir="$HOME/Library/Fonts/"
-    else
-        if [[ ! -d "$HOME"/.fonts ]]; then
-            mkdir -p "$HOME"/.fonts/truetype/MesloLGS-NF/
-        fi
-        fonts_dir="$HOME"/.fonts/truetype/MesloLGS-NF/
-    fi
-    format_font "✅  Fonts Directory is set."
-}
+# set_fonts_dir() {
+#     format_font "#️⃣  Setting Fonts Directory..."
+#     if [[ "$os" = "Darwin" ]]; then
+#         fonts_dir="$HOME/Library/Fonts/"
+#     else
+#         if [[ ! -d "$HOME"/.fonts ]]; then
+#             mkdir -p "$HOME"/.fonts/truetype/MesloLGS-NF/
+#         fi
+#         fonts_dir="$HOME"/.fonts/truetype/MesloLGS-NF/
+#     fi
+#     format_font "✅  Fonts Directory is set."
+# }
 
 install_zsh_plugins() {
     format_font "📦  Installing Zsh Plugins..."
@@ -175,18 +182,18 @@ check_for_root
 
 os=$(uname -s)
 
-fonts_to_get=(  
-    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf
-    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf
-    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf
-    https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf
-)   
+# fonts_to_get=(  
+#     https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Regular.ttf
+#     https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold.ttf
+#     https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Italic.ttf
+#     https://github.com/romkatv/powerlevel10k-media/raw/master/MesloLGS%20NF%20Bold%20Italic.ttf
+# )   
 
-font_url="https://github.com/romkatv/powerlevel10k-media/raw/master/"
+# font_url="https://github.com/romkatv/powerlevel10k-media/raw/master/"
 plugins=(zsh-autosuggestions zsh-syntax-highlighting zsh-completions)
 
 fonts_dir=""
-set_fonts_dir
+# set_fonts_dir
 check_for_git
 check_for_wget
 check_for_curl
