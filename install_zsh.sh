@@ -146,7 +146,7 @@ install_nerd_fonts() {
         unzip -oq /tmp/NerdFontsSymbolsOnly.zip -d ~/.fonts/
         rm /tmp/Meslo.zip /tmp/NerdFontsSymbolsOnly.zip
         if [[ ! $(command -v fc-cache) ]]; then echo "📦  Installing fontconfig..." && sudo apt install fontconfig; fi
-        sudo fc-cache -fv
+        sudo fc-cache -f
     fi 
     format_font "✅  Nerd Fonts are installed."
 }
