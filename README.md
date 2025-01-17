@@ -15,6 +15,7 @@ How this repo is organized:
 | **[kernel_update.sh](fresh-install/linux/kernel_update.sh)** | [fresh-install/linux](fresh-install/linux/) | Linux | Updates Linux to the latest mainline kernel version. |
 | **[macos_alias_installer.sh](fresh-install/macos/macos_alias_installer.sh)** | [fresh-install/macos](fresh-install/macos/) | MacOS | A collection of alias entries I find useful for MacOS commands I never seem to remember the syntax for.
 | **[install_zsh.sh](fresh-install/install_zsh.sh)** | [fresh-install/](fresh-install/) | MacOS or Linux (Debian) |  Installs (if needed) and configures: Homebrew, zsh, oh-my-zsh, NerdFonts, the MesloLGS NF font family, powerlevel10k ZSH theme and and zsh extensions (zsh-autosuggestions zsh-syntax-highlighting zsh-completions).
+| **[generate_nm_connection_profile.sh](linux/generate_nm_wifi_profile.sh)** | [Linux](linux/) | Linux | Generates a WiFi connection profile for Network Manager and writes it to `/etc/NetworkManager/system-connections/`. WPA2-PSK and SAE only, DHCP only, Filename will be `<ssid>.nmconnection` with any spaces in SSID stripped.
 
 
 
