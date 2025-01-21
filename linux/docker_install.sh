@@ -9,12 +9,11 @@
 # If not, you can get it from https://github.com/itdojo/qol.
 
 if [ ! -f ./base_functions.sh ] > /dev/null; then
-    echo "❌  base_functions.sh not found. Cannot continue."
-    echo "Exiting..."
-    exit 1  # Terminate the script
+    echo "❌  base_functions.sh not found. Downloading from GitHub."
+    wget https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh
 else
     SCRIPT_DIR=$(dirname "$(realpath "$0")")    # Get the directory the script is located in
-    source "${SCRIPT_DIR}/base_functions.sh"    # Source the base functions
+    source "${SCRIPT_DIR}/base_functions.sh"    # Source base functions
 fi
 
 if command -v docker > /dev/null; then
