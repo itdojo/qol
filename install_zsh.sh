@@ -204,20 +204,20 @@ case "$os" in
             format_font "📦  Installing Homebrew..."
             /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
         fi
-        local_dir="$HOME/Library/Fonts/"
-        download_fonts "$local_dir"
+        # local_dir="$HOME/Library/Fonts/"
+        # download_fonts "$local_dir"
         format_font "📦  Installing Powerlevel10k..."
         brew install powerlevel10k
-        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
-        echo "source $(brew --prefix)/share/powerlevel10k/powerlevel10k.zsh-theme" >>~/.zshrc
-        git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+        # git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
+        # echo "source $(brew --prefix)/share/powerlevel10k/powerlevel10k.zsh-theme" >>~/.zshrc
+        # git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
         format_font "✅  Powerlevel10k is installed."
         ;;
     Linux)
-        local_dir="/usr/share/fonts/truetype/MesloLGS-NF/"
-        download_fonts $local_dir
-        format_font "#️⃣  Updating Font Cache..."
-        cd && fc-cache -fv
+        # local_dir="/usr/share/fonts/truetype/MesloLGS-NF/"
+        # download_fonts $local_dir
+        # format_font "#️⃣  Updating Font Cache..."
+        # cd && fc-cache -fv
         format_font "📦  Installing Powerlevel10k...."
         git clone --depth=1 https://github.com/romkatv/powerlevel10k.git ${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}/themes/powerlevel10k
         format_font "✅  Powerlevel10k is installed."
