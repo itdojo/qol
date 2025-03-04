@@ -79,6 +79,7 @@ check_for_zsh() {
             sudo apt install -y zsh
         fi
     fi
+    echo "set -o AUTO_CD" >> ~/.zshrc
     format_font "✅  zsh is installed."
 }
 
