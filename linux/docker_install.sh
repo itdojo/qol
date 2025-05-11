@@ -121,11 +121,15 @@ fi
 fstring "Adding $USER to docker group... " "section"
 usermod -aG docker "$USER"
 check_status "Add $USER to docker group" $?
-newgrp docker
+#newgrp docker
 fstring "Adding $SUDO_USER to docker group... " "section"
 usermod -aG docker "$SUDO_USER"
 check_status "Add $SUDO_USER to docker group" $?
-newgrp docker
+#newgrp docker
+printf "Log out and back in (or reboot) to use Docker without sudo.\n"
+printf "You can also run the following command to apply the changes:\n"
+printf "newgrp docker\n"
+printf "This will start a new shell with the docker group applied.\n"
 
 fstring "🐳  DOCKER INSTALLER COMPLETE" "title"
 printline dentistry
