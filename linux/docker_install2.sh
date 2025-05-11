@@ -6,7 +6,7 @@ set -o pipefail
 
 DOCKER_GPG_URL="https://download.docker.com/linux/ubuntu/gpg"
 DOCKER_REPO_URL="https://download.docker.com/linux/ubuntu"
-BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
+BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions2.sh"
 DOCKER_LIST_PATH="/etc/apt/sources.list.d/docker.list"
 DOCKER_KEYRING="/etc/apt/keyrings/docker.gpg"
 
@@ -23,15 +23,15 @@ main() {
 
 validate_base_functions() {
     local script_dir; script_dir=$(dirname "$(realpath "$0")")
-    if [[ ! -f "${script_dir}/base_functions.sh" ]]; then
-        printf "❌  base_functions.sh not found. Downloading from GitHub.\n" >&2
-        if ! wget -q -O "${script_dir}/base_functions.sh" "$BASE_FUNCTIONS_URL"; then
-            printf "❌  Failed to download base_functions.sh\n" >&2
+    if [[ ! -f "${script_dir}/base_functions2.sh" ]]; then
+        printf "❌  base_functions2.sh not found. Downloading from GitHub.\n" >&2
+        if ! wget -q -O "${script_dir}/base_functions2.sh" "$BASE_FUNCTIONS_URL"; then
+            printf "❌  Failed to download base_functions2.sh\n" >&2
             exit 1
         fi
     fi
     # shellcheck disable=SC1090
-    source "${script_dir}/base_functions.sh"
+    source "${script_dir}/base_functions2.sh"
 }
 
 check_existing_docker() {
