@@ -8,13 +8,18 @@
 # The base_functions.sh file should be available in the same directory as this script.
 # If not, you can get it from https://github.com/itdojo/qol.
 
-if [ ! -f ./base_functions.sh ] > /dev/null; then
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"          # Get the directory of the script
+BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh"    # Path to the base_functions.sh file
+
+if [ ! -f "$BASE_FUNCTIONS" ]; then
     echo "❌  base_functions.sh not found. Downloading from GitHub."
-    wget https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh
-else
-    SCRIPT_DIR=$(dirname "$(realpath "$0")")    # Get the directory the script is located in
-    source "${SCRIPT_DIR}/base_functions.sh"    # Source base functions
+    wget https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh -O "$BASE_FUNCTIONS" \
+        || { echo "❌ Failed to download base_functions.sh"; exit 1; }
 fi
+
+# Source the base_functions.sh file
+source "$BASE_FUNCTIONS"
+
 
 if command -v docker > /dev/null; then
     echo "Docker is already installed ($(docker --version))."
