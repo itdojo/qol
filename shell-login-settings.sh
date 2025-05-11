@@ -21,14 +21,4 @@ gitssh() {
     fi
 } 
 
-if [ "$(uname -s)" = "Linux" ]; then
-    echo "Linux"
-    source /etc/os-release
-fi
-
-
-if [ -f ~/.ssh/github ]; then
-    
-fi
-
 
