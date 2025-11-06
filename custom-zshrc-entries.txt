@@ -1,0 +1,104 @@
+# COLIN'S CUSTOM ENVIRONMENT VARIABLES AND ALIASES
+# -------------------------------------------------------------------------
+#                                                     ENVIRONMENT VARIABLES
+# -------------------------------------------------------------------------
+export EDITOR='nvim'
+export VISUAL='nvim'
+export PAGER='less'
+
+# -------------------------------------------------------------------------
+#                                                                   ALIASES
+# -------------------------------------------------------------------------
+alias c=clear                        # Clear terminal window
+alias p=python3                      # python3 alias
+alias upup="sudo apt update && sudo apt upgrade -y"
+
+alias ip4="ip -4 -br addr show | grep -v ^lo"
+alias ips="ip -4 -br addr show | grep -v ^lo"
+alias ip6="ip -6 -br addr show | grep -v ^lo"
+alias getnat="curl ipv4.icanhazip.com"
+alias brip="ip -brief add show"
+
+alias tks="tmux kill-server"         # Kill all tmux sessions
+alias tkserver="tmux kill-server"    # Kill all tmux sessions
+alias tksess="tmux kill-session"     # Kill current tmux session
+alias tksession="tmux kill-session"  # Kill current tmux session
+alias tkp="tmux kill-pane"           # Kill tmux pane
+alias tkw="tmux kill-window"         # Kill tmux window
+alias td="tmux detach"               # Detach from tmux session
+alias ta="tmux attach"               # Attach to tmux session
+alias tn="tmux new"                  # New tmux session (default name)
+alias tns="tmux new -s"              # New tmux session named <session_name>
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+#                                                                HINTS MENU
+# -------------------------------------------------------------------------
+echo "Enter 'hint' for shortcuts reminder"
+function hint() {
+    command cat << 'EOF'
+-- SHORTCUTS --------------------------------------------------------------
+  c                   - Clear terminal window
+  p                   - python3
+  gitssh              - GitHub SSH authentication (ssh-agent + ssh-add)
+  ip4 | ip6 | brip    - Brief IP info
+  upup                - apt update/upgrade
+  here / back         - Mark / return to dir
+  getnat              - Get Public IP
+
+-- DIRECTORIES ------------------------------------------------------------
+  courses / class     - Courseware
+  projects            - Projects
+  personal            - Personal
+ 
+-- TMUX -------------------------------------------------------------------
+  tn                  - New tmux session (default name)
+  tns session_name    - New tmux session named <session_name>
+  tksess[ion]         - Kill tmux session
+  tks / tkserve       - Kill tmux server (All tmux sessions)
+  tkw / tkp           - Kill current tmux [w]indow [p]ane
+  ta / td             - [a]ttach / [d]etach to/from tmux session
+---------------------------------------------------------------------------
+EOF
+}
+
+# -------------------------------------------------------------------------
+#                                                 GITHUB SSH AUTHENTICATION
+# -------------------------------------------------------------------------
+gitssh() {
+    local github_ssh_key="github"
+
+    if [[ ! -f ~/.ssh/"$github_ssh_key" ]]; then
+        printf "%s\n" "⚠️  No SSH key named '$github_ssh_key' found." "Cannot authenticate to GitHub without SSH key." >&2
+        return 1
+    fi
+
+    eval "$(ssh-agent)" >/dev/null
+    ssh-add ~/.ssh/"$github_ssh_key" >/dev/null
+
+    if ! ssh -T git@github.com 2>&1 | grep -q "You've successfully authenticated"; then
+        printf "%s\n" "❌  GitHub Authentication: Failed." >&2
+        return 1
+    else
+        printf "%s\n" "✅  GitHub Authentication: Success." >&2
+    fi
+}
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
+#                                                            DIRECTORY MARK
+# -------------------------------------------------------------------------
+here() {  # Mark current directory
+  MARK_DIR="$PWD"
+  echo "Directory marked: $MARK_DIR"
+}
+
+back() {  # Go to marked directory
+  if [ -z "$MARK_DIR" ]; then
+    echo "No directory marked."
+  else
+    cd "$MARK_DIR" || return
+  fi
+}
+# -------------------------------------------------------------------------
+
