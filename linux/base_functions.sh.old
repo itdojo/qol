@@ -1,38 +1,29 @@
-# shellcheck shell=bash
-# This script is intended to be sourced in other scripts.
-# Usage: source base_functions.sh
+# This script is intended to be sourced in other scripts
+# Usgage: source base_functions.sh
 #
-# NOTE: Several functions in this file call `exit 1` on error. Because this
-# file is meant to be sourced, that will terminate the *calling* shell. That
-# is intentional for scripts that source this library, but be aware: do not
-# source this into an interactive shell and then call e.g. `as_root` unless
-# you're prepared to have the shell exit.
-
 # Check if the script is being run as root
 as_root() {
-    if [ "$EUID" -ne 0 ]; then
-        echo ""
-        echo " ❌  Run as root."
-        echo " ℹ️  Usage: sudo $0"
-        echo ""
-        exit 1
-    fi
+  if [ "$EUID" -ne 0 ]; then
+    echo ""
+    echo " ❌  Run as root."
+    echo " ℹ️  Usage: sudo $0"
+    echo ""
+    exit 1
+  fi
 }
 
 # Make sure the script is not being run as root
 not_as_root() {
-    if [ "$EUID" -eq 0 ]; then
-        echo ""
-        echo " ❌  Do not run as root."
-        echo " ℹ️  Usage: $0"
-        echo ""
-        exit 1
-    fi
+  if [ "$EUID" -eq 0 ]; then
+    echo ""
+    echo " ❌  Do not run as root."
+    echo " ℹ️  Usage: $0"
+    echo ""
+    exit 1
+  fi
 }
 
-# Gracefully handle CTRL-C.
-# NOTE: A trap is installed at the bottom of this file so this fires
-# automatically in any script that sources base_functions.sh.
+# Gracefully handle CTRL-C
 handle_ctrl_c() {
     printf "%s\n" "🛑 CTRL-C detected. Exiting."
     echo ""
@@ -48,20 +39,19 @@ check_if_linux() {
 
 # Update and upgrade system
 update_and_upgrade() {
-    local message="Updating and upgrading system... "
+    message="Updating and upgrading system... "
     printf "%s\n" "$message"
     export DEBIAN_FRONTEND=noninteractive
-    apt-get -o Acquire::ForceIPv4=true update \
-        && apt-get -o Acquire::ForceIPv4=true upgrade -y
+    apt -o Acquire::ForceIPv4=true update && apt upgrade -y
     check_status "$message" $?
     unset DEBIAN_FRONTEND
 }
 
 # Update repository
 update_repo() {
-    local message="Updating repository..."
+    message="Updating repository..."
     printf "%s\n" "$message"
-    apt-get -o Acquire::ForceIPv4=true update
+    apt -o Acquire::ForceIPv4=true update
     check_status "$message" $?
 }
 
@@ -70,11 +60,10 @@ install_packages() {
     # Usage: install_packages package1 package2 package3...
     printf "%s\n" "Installing $*..."
     export DEBIAN_FRONTEND=noninteractive
-    apt-get install "$@" -y
+    apt install "$@" -y
     check_status "Package(s) installation: " $?
     unset DEBIAN_FRONTEND
-    # Automatically restart services if necessary, but only if needrestart is installed
-    command -v needrestart >/dev/null 2>&1 && needrestart -r a
+    needrestart -r a # Automatically restart services if necessary
 }
 
 # Check the status of the last executed command
@@ -94,7 +83,7 @@ check_status() {
         printf "%s: " "$message"
         fstring "SUCCESS ✅" "normal" "bold" "green"
     else
-        printf "%s: ❌ " "$message"
+        echo -ne ""$message": ❌ "
         echo -ne "$(fstring "FAILED" "normal" "bold" "red" "reverse")"
         echo " ❌"
         return 1
@@ -104,20 +93,18 @@ check_status() {
 
 # Print a line the width of the terminal
 printline() {
-    local sep cols line
-    case "$1" in
-        solid)     sep="─" ;;   # ─────────────
+    local sep
+    case $1 in
+        solid)     sep="─" ;;   # ───────────── 
         bullet)    sep="•" ;;   # •••••••••••••
         ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
         star)      sep="★" ;;   # ★★★★★★★★★★★★★★
         plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛✛
         diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆◆
         dentistry) sep="⏥" ;;   # ⏥⏥⏥⏥⏥⏥⏥⏥
-        *)         sep="─" ;;   # ──────────────
+        *)         sep="─" ;;    # ──────────────
     esac
-    # Fall back to 80 columns when there's no TTY (cron, CI, pipes, etc.)
-    cols=$(tput cols 2>/dev/null || echo 80)
-    printf -v line '%*s' "$cols" ''
+    printf -v line '%*s' "$(tput cols)" ''
     echo "${line// /$sep}"
 }
 
@@ -125,7 +112,7 @@ printline() {
 fstring() {
     # Usage: fstring "text" "type" "weight" "color" "emphasis"
     #⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽
-    #│  type   ⎪  weight  ⎪  color  ⎪  emphasis  │
+    #│  type   ⎪  weight  ⎪  color  ⎪  emphasis  │ 
     #│⎺⎺⎺⎺⎺⎺⎺⎺⎺│⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺│⎺⎺⎺⎺⎺⎺⎺⎺⎺│⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺│
     #│ normal  │  normal  │ red     │  italics   │
     #│ title   │  bold    │ orange  │  underline │
@@ -149,14 +136,14 @@ fstring() {
     local font_color="$4"                # No default, to allow conditional application
     local font_emphasis="${5:-normal}"   # Default to normal if not specified
     local reset="\033[0m"
-    local weight color linetype emphasis
+    local weight color linetype emphasis 
 
     # Determine line type and prepend symbols to string if needed
     case "$text_type" in
         title)    linetype="dentistry"; string="🔹  $string"; font_weight="bold"; font_color="blue" ;;
         section)  linetype="solid";     string="🔸  $string"; font_weight="bold"; font_color="yellow" ;;
         warning)  linetype="solid";     string="⚠️  $string"; font_weight="bold"; font_color="red" ;;
-        failure)  linetype="solid";     string="❌  $string"; font_weight="bold"; font_color="red"; font_emphasis="blink" ;;
+        failure)  linetype="solid";     string="❌  $string"; font_weight="bold"; font_color="red" emphasis="blink" ;;
         success)  linetype="solid";     string="✅  $string"; font_weight="bold"; font_color="green" ;;
         install)  linetype="solid";     string="📦  $string"; font_weight="bold"; font_color="yellow" ;;
         normal)   linetype="" ;;  # No line type
@@ -164,14 +151,14 @@ fstring() {
     esac
 
     # Set font weight
-    case "$font_weight" in
+    case $font_weight in
         normal)    weight=0 ;;  # Normal text
         bold)      weight=1 ;;  # Bold text
         light)     weight=2 ;;  # Light text
         *)         weight=0 ;;  # Use normal weight if unspecified
     esac
 
-    case "$font_emphasis" in
+    case $font_emphasis in
         italics)   emphasis=3 ;;  # Italic text
         underline) emphasis=4 ;;  # Underlined text
         blink)     emphasis=5 ;;  # Blinking text (may not work in all terminals)
@@ -181,7 +168,7 @@ fstring() {
     esac
 
     # Set font color
-    case "$font_color" in
+    case $font_color in
         red)    color="\033[${weight};${emphasis};31m" ;;  # 🔴
         orange) color="\033[${weight};${emphasis};91m" ;;  # 🟠
         yellow) color="\033[${weight};${emphasis};33m" ;;  # 🟡
@@ -190,8 +177,8 @@ fstring() {
         indigo) color="\033[${weight};${emphasis};94m" ;;  # 🟣
         violet) color="\033[${weight};${emphasis};35m" ;;  # 🟤
         white)  color="\033[${weight};${emphasis};97m" ;;  # ⚪
-        black)  color="\033[${weight};${emphasis};30m" ;;  # ⚫
-        *)      color="" ;;                                # No color specified -> no SGR
+        black)  color="\033[${weight};${emphasis};30m" ;;  # ⚫  
+        *)      color="\033[${weight};${emphasis};m"   ;;  # Use given weight without color if unspecified
     esac
 
     # Print the line, text, and line again if linetype is set
@@ -200,18 +187,12 @@ fstring() {
     #if [[ -n $linetype ]]; then printline "$linetype"; fi
 }
 
-# Install the CTRL-C trap for any script that sources this library.
-trap handle_ctrl_c INT
-
 # Import the os-release file
 if [ -f /etc/os-release ]; then
-    # shellcheck disable=SC1091
     . /etc/os-release
     export OS_NAME="$NAME"
     export OS_VERSION="$VERSION"
     export OS_CODENAME="$VERSION_CODENAME"
-    # Avoid leaking the rest of os-release into the calling script's env.
-    unset NAME VERSION VERSION_CODENAME VERSION_ID ID ID_LIKE PRETTY_NAME \
-          ANSI_COLOR LOGO CPE_NAME HOME_URL SUPPORT_URL BUG_REPORT_URL \
-          PRIVACY_POLICY_URL UBUNTU_CODENAME
+    unset HOME_URL SUPPORT_URL BUG_REPORT_URL PRIVACY_POLICY_URL
 fi
+
