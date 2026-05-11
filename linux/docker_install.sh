@@ -3,10 +3,12 @@
 # This script installs Docker on a Linux system. It also adds the current user to the docker group.
 # It has been successfully tested on Ubuntu, Pop!_OS, Kali, Ubuntu MATE, and Raspberry Pi OS.
 #
-# Updated: April 2026
+# Updated: May 2026
+# - Added Ubuntu 26.04 LTS (Resolute) to Docker's supported codename list and
+#   dropped plucky (25.04, EOL since January 2026).
 # - Added support for Ubuntu 25.10 (Questing Quokka) and 25.04 (Plucky Puffin)
 # - Added explicit codename validation against Docker's supported Ubuntu releases
-#   (jammy 22.04, noble 24.04, plucky 25.04, questing 25.10)
+#   (jammy 22.04, noble 24.04, questing 25.10, resolute 26.04)
 # - Added native Debian 12 (bookworm) / 13 (trixie) support (previously only Kali)
 # - Fixed Linux Mint compatibility by using ${UBUNTU_CODENAME:-$VERSION_CODENAME}
 #   (Mint sets UBUNTU_CODENAME=noble/jammy even when VERSION_CODENAME is wilma/etc.)
@@ -36,11 +38,11 @@ fi
 source "$BASE_FUNCTIONS"
 
 # ----------------------------------------------------------------------------
-# Docker's officially supported Ubuntu codenames (as of April 2026).
+# Docker's officially supported Ubuntu codenames (as of May 2026).
 # Update this list when Docker adds/drops a release.
 # https://docs.docker.com/engine/install/ubuntu/
 # ----------------------------------------------------------------------------
-SUPPORTED_UBUNTU_CODENAMES=("jammy" "noble" "plucky" "questing")
+SUPPORTED_UBUNTU_CODENAMES=("jammy" "noble" "questing" "resolute")
 
 # Debian releases supported by Docker's repo (download.docker.com/linux/debian).
 SUPPORTED_DEBIAN_CODENAMES=("bookworm" "trixie")
@@ -120,7 +122,7 @@ as_root                   # Confirm running as root
 check_if_linux            # Confirm running on Linux
 trap handle_ctrl_c SIGINT # Gracefully handle CTRL-C
 
-fstring "🐳  DOCKER INSTALLER FOR LINUX - v.2026-04" "title"
+fstring "🐳  DOCKER INSTALLER FOR LINUX - v.2026-05" "title"
 printline dentistry
 
 if ! command -v curl >/dev/null; then
