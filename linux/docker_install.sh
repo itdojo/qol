@@ -18,6 +18,12 @@
 #   the "already installed" branch (return 0 only worked when sourced)
 # - Added post-install check (docker run hello-world)
 #
+# Updated: July 2026
+# - Unified terminal output with the repo-standard theme (log_* helpers from
+#   base_functions.sh); replaced the old fstring calls.
+# - Root check now happens before any prompts; 'q' at the uninstall prompt
+#   aborts the installer instead of falling through.
+#
 # This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
 # The base_functions.sh file should be available in the same directory as this script.
 # If not, you can get it from https://github.com/itdojo/qol.
@@ -25,17 +31,21 @@
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"       # Get the directory of the script
 BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh" # Path to the base_functions.sh file
 
+BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
+
 if [ ! -f "$BASE_FUNCTIONS" ]; then
-  echo "❌  base_functions.sh not found. Downloading from GitHub."
-  wget https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh -O "$BASE_FUNCTIONS" ||
-    {
-      echo "❌ Failed to download base_functions.sh"
-      exit 1
-    }
+  echo "base_functions.sh not found. Downloading from GitHub..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS"
+  else
+    wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS"
+  fi || { echo "❌  Failed to download base_functions.sh"; exit 1; }
 fi
 
 # Source the base_functions.sh file
 source "$BASE_FUNCTIONS"
+command -v log_step >/dev/null 2>&1 \
+  || { echo "❌  base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
 
 # ----------------------------------------------------------------------------
 # Docker's officially supported Ubuntu codenames (as of May 2026).
@@ -68,7 +78,7 @@ is_supported_codename() {
 # Docker's docs explicitly recommend this on Ubuntu 24.04+ and Debian 12+.
 # ----------------------------------------------------------------------------
 remove_conflicting_packages() {
-  fstring "🧹  Removing any conflicting distro Docker packages... " "section"
+  log_step "Removing conflicting distro Docker packages..."
   local pkgs=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
   # apt-get remove only removes what's installed; missing packages don't error.
   apt-get remove -y "${pkgs[@]}" 2>/dev/null || true
@@ -80,69 +90,58 @@ remove_conflicting_packages() {
 # Returns 0 on success, non-zero on failure (but does NOT exit the script).
 # ----------------------------------------------------------------------------
 docker_smoke_test() {
-  fstring "🔬  Running Docker smoke test (hello-world)... " "section"
+  log_step "Running Docker smoke test (hello-world)..."
   if docker run --rm hello-world >/dev/null 2>&1; then
-    printf "✅  Smoke test passed - Docker is working.\n"
+    log_ok "Smoke test passed - Docker is working."
     return 0
   else
-    printf "⚠️   Smoke test failed. Docker installed but couldn't run hello-world.\n"
+    log_warn "Smoke test failed. Docker installed but couldn't run hello-world."
     printf "    Check 'systemctl status docker' and 'journalctl -u docker'.\n"
     return 1
   fi
 }
 
 # ----------------------------------------------------------------------------
+# Pre-flight
+# ----------------------------------------------------------------------------
+clear          # Clear the screen
+as_root        # Confirm running as root (before any prompts or apt work)
+check_if_linux # Confirm running on Linux
+
+log_title "🐳  DOCKER INSTALLER FOR LINUX  -  v.2026-07"
+
+# ----------------------------------------------------------------------------
 # Already-installed check
 # ----------------------------------------------------------------------------
 if command -v docker >/dev/null; then
-  echo "Docker is already installed ($(docker --version))."
-  read -p "Do you want to continue with the installation? [y/N]: " -r confirm
-  case $confirm in
-  [Yy])
-    echo ""
-    ;;
-  *)
+  log_info "Docker is already installed ($(docker --version))."
+  read -r -p "Do you want to continue with the installation? [y/N]: " confirm
+  if [[ ! $confirm =~ ^[Yy]$ ]]; then
     echo "Exiting..."
     exit 0
-    ;;
-  esac
-  read -p "Do you want to uninstall existing Docker install first? [y/N]: " -r confirm
+  fi
+  read -r -p "Do you want to uninstall the existing Docker install first? [y/N]: " confirm
   if [[ $confirm =~ ^[Yy]$ ]]; then
-    source "${SCRIPT_DIR}/docker_uninstall.sh" # Source the docker_uninstall.sh
-    uninstall_docker
+    # shellcheck source=docker_uninstall.sh
+    source "${SCRIPT_DIR}/docker_uninstall.sh"
+    uninstall_docker || exit $? # 'q' (or a failed uninstall) aborts the install
   else
     echo "Continuing with Docker installation (will install on top of existing)..."
-    # NOTE: previously had `return 0` here, which only works if sourced.
-    # Falling through to the install flow is the correct behavior.
   fi
 fi
 
-clear                     # Clear the screen
-as_root                   # Confirm running as root
-check_if_linux            # Confirm running on Linux
-trap handle_ctrl_c SIGINT # Gracefully handle CTRL-C
-
-fstring "🐳  DOCKER INSTALLER FOR LINUX - v.2026-05" "title"
-printline dentistry
-
-if ! command -v curl >/dev/null; then
-  echo "Installing curl..."
-  apt-get update && apt-get install curl -y
-fi
-if ! command -v needrestart >/dev/null; then
-  echo "Installing needrestart..."
-  apt-get update && apt-get install needrestart -y
-fi
+command -v curl >/dev/null || install_packages curl
+command -v needrestart >/dev/null || install_packages needrestart
 
 # ----------------------------------------------------------------------------
 # Detect distro
 # ----------------------------------------------------------------------------
-fstring "Gathering Linux Release Info... " "section"
+log_step "Gathering Linux release info..."
 
 # Determine if this is a Raspberry Pi 🥧
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
-  printf "%s\n" "🥧 I am a $(fstring "Raspberry Pi" "normal" "bold" "red")."
+  printf "%s\n" "🥧 I am a $(style_text "Raspberry Pi" bold red)."
 fi
 
 # Source the os-release file
@@ -166,24 +165,24 @@ APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
 # ----------------------------------------------------------------------------
 if [ -n "$model" ]; then
   # ---- Raspberry Pi -------------------------------------------------------
-  fstring "Installing Docker for $model... " "section"
-  printf "%s\n" "Performing $(fstring "Raspberry Pi" "normal" "bold" "red") Docker installation..."
+  log_step "Installing Docker for $model..."
+  printf "%s\n" "Performing $(style_text "Raspberry Pi" bold red) Docker installation..."
 
   remove_conflicting_packages
   curl -sSL https://get.docker.com | sh
-  check_status "$(fstring "🥧  Raspberry Pi" "normal" "normal" "red") Docker installation" $?
+  check_status "🥧  Raspberry Pi Docker installation" $?
 
 elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
   # Kali is a rolling release based on Debian. Use the appropriate Debian
   # codename for Docker's apt repo.
-  printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
-  fstring "Installing Docker for $PRETTY_NAME... " "section"
+  printf "%s\n" "ℹ️  I am a $(style_text "$PRETTY_NAME" bold blue) installation."
+  log_step "Installing Docker for $PRETTY_NAME..."
 
   remove_conflicting_packages
   install_packages ca-certificates curl gnupg
 
-  fstring "🔑  Adding Docker's GPG key... " "section"
+  log_step "Adding Docker's GPG key..."
   install -m 0755 -d /etc/apt/keyrings
   rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
   set -o pipefail
@@ -194,7 +193,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   chmod a+r /etc/apt/keyrings/docker.asc
   check_status "Adding Docker's GPG key" $rc
 
-  fstring "Adding Docker repository to apt sources (Debian ${KALI_DEBIAN_CODENAME})... " "section"
+  log_step "Adding Docker repository to apt sources (Debian ${KALI_DEBIAN_CODENAME})..."
   echo \
     "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
         ${KALI_DEBIAN_CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
@@ -202,7 +201,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
 
   update_repo
 
-  fstring "Installing Docker... " "section"
+  log_step "Installing Docker..."
   install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   check_status "Docker installation" $?
 
@@ -212,7 +211,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
 
 elif [ "$ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
-  printf "%s\n" "ℹ️  I am a $(fstring "$PRETTY_NAME" "normal" "bold" "blue") installation."
+  printf "%s\n" "ℹ️  I am a $(style_text "$PRETTY_NAME" bold blue) installation."
 
   if ! is_supported_codename "$VERSION_CODENAME" "${SUPPORTED_DEBIAN_CODENAMES[@]}"; then
     printf "⚠️   Debian codename '%s' is not in Docker's supported list (%s).\n" \
@@ -222,11 +221,11 @@ elif [ "$ID" = "debian" ]; then
     curl -sSL https://get.docker.com | sh
     check_status "Docker convenience-script installation" $?
   else
-    fstring "Installing Docker for $PRETTY_NAME ($VERSION_CODENAME)... " "section"
+    log_step "Installing Docker for $PRETTY_NAME ($VERSION_CODENAME)..."
     remove_conflicting_packages
     install_packages ca-certificates curl gnupg apt-transport-https lsb-release software-properties-common
 
-    fstring "🔑  Adding Docker's GPG key... " "section"
+    log_step "Adding Docker's GPG key..."
     install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
     set -o pipefail
@@ -237,7 +236,7 @@ elif [ "$ID" = "debian" ]; then
     chmod a+r /etc/apt/keyrings/docker.asc
     check_status "Adding Docker's GPG key" $rc
 
-    fstring "Adding Docker repository to apt sources... " "section"
+    log_step "Adding Docker repository to apt sources..."
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
           $VERSION_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
@@ -245,7 +244,7 @@ elif [ "$ID" = "debian" ]; then
 
     update_repo
 
-    fstring "Installing Docker... " "section"
+    log_step "Installing Docker..."
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Docker installation" $?
 
@@ -257,9 +256,9 @@ else
   # ---- Ubuntu and Ubuntu derivatives --------------------------------------
   # Covers Ubuntu, Pop!_OS, Linux Mint, Ubuntu MATE/Studio/Kylin/Budgie,
   # elementary OS, Zorin, KDE neon, etc.
-  fstring "Installing Docker for $PRETTY_NAME... " "section"
-  printf "%s\n" "ℹ️  This is not a $(fstring "Raspberry Pi" "normal" "normal" "red"), $(fstring "Kali" "normal" "normal" "blue") or $(fstring "Debian" "normal" "normal" "blue") installation."
-  printf "%s\n" "    Treating as Ubuntu / Ubuntu-derivative. Apt suite: $(fstring "$APT_CODENAME" "normal" "bold" "green")"
+  log_step "Installing Docker for $PRETTY_NAME..."
+  printf "%s\n" "ℹ️  This is not a $(style_text "Raspberry Pi" normal red), $(style_text "Kali" normal blue) or $(style_text "Debian" normal blue) installation."
+  printf "%s\n" "    Treating as Ubuntu / Ubuntu-derivative. Apt suite: $(style_text "$APT_CODENAME" bold green)"
 
   # Validate the codename. If we can't, fall back to get.docker.com which
   # has its own per-distro logic. This avoids a confusing 404 on the apt
@@ -273,14 +272,13 @@ else
     curl -sSL https://get.docker.com | sh
     check_status "Docker convenience-script installation" $?
   else
-    printf "%s\n" "📦  Installing some required packages for 🐳 Docker..."
     install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
     check_status "Checking result of package installation" $?
 
     remove_conflicting_packages
 
     # Add Docker's official GPG key
-    fstring "🔑  Adding Docker's GPG key... " "section"
+    log_step "Adding Docker's GPG key..."
     install -m 0755 -d /etc/apt/keyrings
     rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
     set -o pipefail
@@ -293,7 +291,7 @@ else
 
     # Add the repository to apt sources. We use APT_CODENAME so that
     # Mint/Pop!_OS/etc. resolve to their upstream Ubuntu codename.
-    fstring "Adding Docker repository to apt sources... " "section"
+    log_step "Adding Docker repository to apt sources..."
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
           $APT_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
@@ -301,7 +299,7 @@ else
 
     update_repo
 
-    fstring "Installing Docker... " "section"
+    log_step "Installing Docker..."
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Checking Result of Docker installation" $?
 
@@ -333,7 +331,7 @@ if [ ${#candidate_users[@]} -eq 0 ]; then
   printf "        sudo usermod -aG docker <username>\n"
 else
   for u in "${candidate_users[@]}"; do
-    fstring "Adding $u to docker group... " "section"
+    log_step "Adding $u to docker group..."
     usermod -aG docker "$u"
     check_status "Add $u to docker group" $?
   done
@@ -348,6 +346,5 @@ fi
 # ----------------------------------------------------------------------------
 docker_smoke_test || true
 
-fstring "🐳  DOCKER INSTALLER COMPLETE" "title"
-printline dentistry
+log_title "🐳  DOCKER INSTALLER COMPLETE"
 echo ""

@@ -1,31 +1,161 @@
 # shellcheck shell=bash
-# This script is intended to be sourced in other scripts.
-# Usage: source base_functions.sh
+# ----------------------------------------------------------------------------
+# base_functions.sh
 #
-# NOTE: Several functions in this file call `exit 1` on error. Because this
-# file is meant to be sourced, that will terminate the *calling* shell. That
-# is intentional for scripts that source this library, but be aware: do not
-# source this into an interactive shell and then call e.g. `as_root` unless
-# you're prepared to have the shell exit.
+# Shared helper library for the scripts in this repo.
+# This file is meant to be SOURCED, not executed:
+#     source base_functions.sh
+#
+# Provides:
+#   - The repo-standard output theme: printline, style_text, format_font and
+#     the log_info / log_step / log_ok / log_warn / log_err / log_title
+#     helpers. Keep the theme in sync with install_zsh.sh (standalone).
+#   - fstring: back-compat wrapper around the old output API.
+#   - check_status, as_root, not_as_root, check_if_linux
+#   - apt helpers: update_repo, update_and_upgrade, install_packages
+#   - OS_NAME / OS_VERSION / OS_CODENAME exported from /etc/os-release
+#   - A CTRL-C trap (installed at the bottom of this file)
+#
+# NOTE: Several functions call `exit` on error. Because this file is meant to
+# be sourced by scripts, that terminates the *calling* script. That is
+# intentional — but do not source this into an interactive shell and then
+# call e.g. `as_root` unless you're prepared to have the shell exit.
+# ----------------------------------------------------------------------------
 
-# Check if the script is being run as root
+# ----------------------------------------------------------------------------
+# Pretty output — repo-standard theme
+# ----------------------------------------------------------------------------
+
+# Decide once, at source time, whether to emit ANSI colors. Colors are
+# skipped when stdout is not a terminal (pipes, logs, cron) or NO_COLOR is
+# set, so captured output stays clean.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    QOL_COLOR=1
+else
+    QOL_COLOR=""
+fi
+
+# Print a separator line the width of the terminal.
+# Usage: printline [solid|bullet|ibeam|star|plus|diamond|dentistry]
+printline() {
+    local sep cols line
+    case "${1:-solid}" in
+        solid)     sep="─" ;;   # ─────────────
+        bullet)    sep="•" ;;   # •••••••••••••
+        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+        star)      sep="★" ;;   # ★★★★★★★★★★★★★
+        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛
+        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆
+        dentistry) sep="⏥" ;;  # ⏥⏥⏥⏥⏥⏥⏥⏥
+        *)         sep="─" ;;
+    esac
+    # Fall back to 80 columns when there is no TTY (cron, CI, pipes, etc.)
+    cols="$(tput cols 2>/dev/null)" || cols=80
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    printf -v line '%*s' "$cols" ''
+    printf '%s\n' "${line// /$sep}"
+}
+
+# Print styled text with no separator. Also usable inline via command
+# substitution: echo "I am a $(style_text "Raspberry Pi" bold red)."
+# Usage: style_text "text" [normal|bold|light] [red|green|yellow|blue]
+style_text() {
+    local text="$1" weight="${2:-normal}" color="${3:-}"
+    local weight_code color_code sgr
+    case "$weight" in
+        normal) weight_code=0 ;;
+        bold)   weight_code=1 ;;
+        light)  weight_code=2 ;;
+        *)      weight_code=0 ;;
+    esac
+    case "$color" in
+        red)    color_code=31 ;;
+        green)  color_code=32 ;;
+        yellow) color_code=33 ;;
+        blue)   color_code=34 ;;
+        *)      color_code="" ;;
+    esac
+    if [[ -z "$QOL_COLOR" ]] || [[ -z "$color_code" && "$weight_code" -eq 0 ]]; then
+        printf '%s\n' "$text"
+        return 0
+    fi
+    if [[ -n "$color_code" ]]; then
+        sgr="${weight_code};${color_code}"
+    else
+        sgr="$weight_code"
+    fi
+    printf '\033[%sm%s\033[0m\n' "$sgr" "$text"
+}
+
+# Separator + styled text: the repo-standard log line.
+# Usage: format_font "text" [weight] [color]
+format_font() {
+    printline
+    style_text "$1" "${2:-bold}" "${3:-yellow}"
+}
+
+log_info() { format_font "ℹ️   $1" bold blue;   }
+log_step() { format_font "📦  $1" bold yellow; }
+log_ok()   { format_font "✅  $1" bold green;  }
+log_warn() { format_font "⚠️   $1" bold yellow; }
+log_err()  { format_font "❌  $1" bold red >&2; }
+
+# Banner for script titles and completion messages.
+log_title() {
+    printline dentistry
+    style_text "$1" bold blue
+    printline dentistry
+}
+
+# ----------------------------------------------------------------------------
+# Back-compat: the old fstring API. New scripts should call the log_*
+# helpers directly. The old "emphasis" argument is no longer supported.
+# Usage: fstring "text" [type] [weight] [color]
+# ----------------------------------------------------------------------------
+fstring() {
+    local text="$1" text_type="${2:-normal}" weight="${3:-normal}" color="${4:-}"
+    case "$text_type" in
+        title)           log_title "$text" ;;
+        section|install) log_step  "$text" ;;
+        warning)         log_warn  "$text" ;;
+        failure)         log_err   "$text" ;;
+        success)         log_ok    "$text" ;;
+        *)               style_text "$text" "$weight" "$color" ;;
+    esac
+}
+
+# ----------------------------------------------------------------------------
+# Status / safety helpers
+# ----------------------------------------------------------------------------
+
+# Report the result of the previous command.
+# Usage: some_command; check_status "Description of step" $?
+check_status() {
+    if [ $# -ne 2 ]; then
+        log_warn "check_status needs a message and an exit status. Usage: check_status <message> <exit_status>"
+        return 1
+    fi
+    local message="$1" exit_status="$2"
+    if [ "$exit_status" -eq 0 ]; then
+        log_ok "$message: SUCCESS"
+        return 0
+    fi
+    log_err "$message: FAILED (exit $exit_status)"
+    return "$exit_status"
+}
+
+# Require the script to be run as root.
 as_root() {
-    if [ "$EUID" -ne 0 ]; then
-        echo ""
-        echo " ❌  Run as root."
-        echo " ℹ️  Usage: sudo $0"
-        echo ""
+    if [ "${EUID:-$(id -u)}" -ne 0 ]; then
+        log_err "Run as root.  Usage: sudo $0"
         exit 1
     fi
 }
 
-# Make sure the script is not being run as root
+# Require the script to NOT be run as root.
 not_as_root() {
-    if [ "$EUID" -eq 0 ]; then
-        echo ""
-        echo " ❌  Do not run as root."
-        echo " ℹ️  Usage: $0"
-        echo ""
+    if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+        log_err "Do not run as root.  Usage: $0"
         exit 1
     fi
 }
@@ -34,171 +164,51 @@ not_as_root() {
 # NOTE: A trap is installed at the bottom of this file so this fires
 # automatically in any script that sources base_functions.sh.
 handle_ctrl_c() {
-    printf "%s\n" "🛑 CTRL-C detected. Exiting."
-    echo ""
-    exit 1
+    echo
+    log_err "Interrupted (CTRL-C). Exiting."
+    exit 130
 }
 
 check_if_linux() {
-    if [ "$(uname)" != "Linux" ]; then
-        echo "This script is intended for Linux only."
+    if [ "$(uname -s)" != "Linux" ]; then
+        log_err "This script is intended for Linux only."
         exit 1
     fi
 }
 
-# Update and upgrade system
-update_and_upgrade() {
-    local message="Updating and upgrading system... "
-    printf "%s\n" "$message"
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get -o Acquire::ForceIPv4=true update \
-        && apt-get -o Acquire::ForceIPv4=true upgrade -y
-    check_status "$message" $?
-    unset DEBIAN_FRONTEND
-}
+# ----------------------------------------------------------------------------
+# apt helpers (Debian/Ubuntu-family)
+# ----------------------------------------------------------------------------
 
-# Update repository
+# Refresh the package lists.
 update_repo() {
-    local message="Updating repository..."
-    printf "%s\n" "$message"
+    log_step "Updating package lists..."
     apt-get -o Acquire::ForceIPv4=true update
-    check_status "$message" $?
+    check_status "apt-get update" $?
 }
 
-# Install packages
+# Update package lists and upgrade all packages.
+update_and_upgrade() {
+    log_step "Updating and upgrading system..."
+    DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true update \
+        && DEBIAN_FRONTEND=noninteractive apt-get -o Acquire::ForceIPv4=true upgrade -y
+    check_status "System update and upgrade" $?
+}
+
+# Install one or more packages.
+# Usage: install_packages package1 [package2 ...]
 install_packages() {
-    # Usage: install_packages package1 package2 package3...
-    printf "%s\n" "Installing $*..."
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get install "$@" -y
-    check_status "Package(s) installation: " $?
-    unset DEBIAN_FRONTEND
-    # Automatically restart services if necessary, but only if needrestart is installed
+    log_step "Installing: $*"
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "$@"
+    local rc=$?
+    # Restart services that need it, when needrestart is available.
     command -v needrestart >/dev/null 2>&1 && needrestart -r a
+    check_status "Installing $*" "$rc"
 }
 
-# Check the status of the last executed command
-check_status() {
-    if [ $# -ne 2 ]; then
-        echo -ne "💡 "
-        echo -e "Cannot check status without a message and exit status."
-        echo "Usage: $(fstring "check_status <message> <exit_status>" "normal" "normal" "yellow")"
-
-        return 1
-    fi
-
-    local message="$1"
-    local exit_status="$2"
-
-    if [ "$exit_status" -eq 0 ]; then
-        printf "%s: " "$message"
-        fstring "SUCCESS ✅" "normal" "bold" "green"
-    else
-        printf "%s: ❌ " "$message"
-        echo -ne "$(fstring "FAILED" "normal" "bold" "red" "reverse")"
-        echo " ❌"
-        return 1
-    fi
-}
-
-
-# Print a line the width of the terminal
-printline() {
-    local sep cols line
-    case "$1" in
-        solid)     sep="─" ;;   # ─────────────
-        bullet)    sep="•" ;;   # •••••••••••••
-        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
-        star)      sep="★" ;;   # ★★★★★★★★★★★★★★
-        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛✛
-        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆◆
-        dentistry) sep="⏥" ;;   # ⏥⏥⏥⏥⏥⏥⏥⏥
-        *)         sep="─" ;;   # ──────────────
-    esac
-    # Fall back to 80 columns when there's no TTY (cron, CI, pipes, etc.)
-    cols=$(tput cols 2>/dev/null || echo 80)
-    printf -v line '%*s' "$cols" ''
-    echo "${line// /$sep}"
-}
-
-# Format and print text
-fstring() {
-    # Usage: fstring "text" "type" "weight" "color" "emphasis"
-    #⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽⎽
-    #│  type   ⎪  weight  ⎪  color  ⎪  emphasis  │
-    #│⎺⎺⎺⎺⎺⎺⎺⎺⎺│⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺│⎺⎺⎺⎺⎺⎺⎺⎺⎺│⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺│
-    #│ normal  │  normal  │ red     │  italics   │
-    #│ title   │  bold    │ orange  │  underline │
-    #│ section │  light   │ yellow  │  blink     │
-    #│ warning │          │ green   │  reverse   │
-    #│ success │          │ blue    │  hidden    │
-    #│ install │          │ indigo  │            │
-    #│ failure │          │ violet  │            │
-    #│         │          │ white   │            │
-    #│         │          │ black   │            │
-    #⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺⎺
-    # Example: fstring "Say Something" "normal" "bold" "blue" "italics"
-    # Example: fstring "Say Something"  <-- This will print normal text
-    # "weight" "color" and "emphasis" are optional (controlled by "type" setting when not specified)
-    # If you want to override the "type" setting, you can set "weight", "color" and "emphasis" explicitly
-    # If you want "color" to be applied, you must specify "weight".
-    # If you want "emphasis" to be applied, you must specify "weight" and "color".
-    local string="$1"
-    local text_type="${2:-normal}"       # Default to normal if not specified
-    local font_weight="${3:-normal}"     # Default to normal if not specified
-    local font_color="$4"                # No default, to allow conditional application
-    local font_emphasis="${5:-normal}"   # Default to normal if not specified
-    local reset="\033[0m"
-    local weight color linetype emphasis
-
-    # Determine line type and prepend symbols to string if needed
-    case "$text_type" in
-        title)    linetype="dentistry"; string="🔹  $string"; font_weight="bold"; font_color="blue" ;;
-        section)  linetype="solid";     string="🔸  $string"; font_weight="bold"; font_color="yellow" ;;
-        warning)  linetype="solid";     string="⚠️  $string"; font_weight="bold"; font_color="red" ;;
-        failure)  linetype="solid";     string="❌  $string"; font_weight="bold"; font_color="red"; font_emphasis="blink" ;;
-        success)  linetype="solid";     string="✅  $string"; font_weight="bold"; font_color="green" ;;
-        install)  linetype="solid";     string="📦  $string"; font_weight="bold"; font_color="yellow" ;;
-        normal)   linetype="" ;;  # No line type
-        *)        linetype="" ;;  # No line type
-    esac
-
-    # Set font weight
-    case "$font_weight" in
-        normal)    weight=0 ;;  # Normal text
-        bold)      weight=1 ;;  # Bold text
-        light)     weight=2 ;;  # Light text
-        *)         weight=0 ;;  # Use normal weight if unspecified
-    esac
-
-    case "$font_emphasis" in
-        italics)   emphasis=3 ;;  # Italic text
-        underline) emphasis=4 ;;  # Underlined text
-        blink)     emphasis=5 ;;  # Blinking text (may not work in all terminals)
-        reverse)   emphasis=7 ;;  # Reverse text (swap foreground and background colors)
-        hidden)    emphasis=8 ;;  # Hidden text (useful for passwords)
-        *)         emphasis=$weight ;;  # Use given weight without emphasis if unspecified
-    esac
-
-    # Set font color
-    case "$font_color" in
-        red)    color="\033[${weight};${emphasis};31m" ;;  # 🔴
-        orange) color="\033[${weight};${emphasis};91m" ;;  # 🟠
-        yellow) color="\033[${weight};${emphasis};33m" ;;  # 🟡
-        green)  color="\033[${weight};${emphasis};32m" ;;  # 🟢
-        blue)   color="\033[${weight};${emphasis};34m" ;;  # 🔵
-        indigo) color="\033[${weight};${emphasis};94m" ;;  # 🟣
-        violet) color="\033[${weight};${emphasis};35m" ;;  # 🟤
-        white)  color="\033[${weight};${emphasis};97m" ;;  # ⚪
-        black)  color="\033[${weight};${emphasis};30m" ;;  # ⚫
-        *)      color="" ;;                                # No color specified -> no SGR
-    esac
-
-    # Print the line, text, and line again if linetype is set
-    if [[ -n $linetype ]]; then printline "$linetype"; fi
-    echo -e "${color}${string}${reset}"
-    #if [[ -n $linetype ]]; then printline "$linetype"; fi
-}
+# ----------------------------------------------------------------------------
+# Environment
+# ----------------------------------------------------------------------------
 
 # Install the CTRL-C trap for any script that sources this library.
 trap handle_ctrl_c INT

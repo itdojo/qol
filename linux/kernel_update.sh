@@ -1,5 +1,5 @@
 #!/bin/bash
- 
+
 # This script updates the Linux kernel to the latest available version.
 # It uses a different update strategy depending on the detected platform:
 #   - Raspberry Pi OS:        apt full-upgrade (standard) plus optional, opt-in
@@ -37,31 +37,39 @@
 #  - Kali prompt now defaults to "no" on empty/garbage input rather than
 #    exiting with status 1.
 #
+# Updated: July 2026
+#  - Unified terminal output with the repo-standard theme (log_* helpers from
+#    base_functions.sh); replaced the old fstring calls.
+#
 # This script relies on the availability of the base_functions.sh file. If it
 # is not found, it will be downloaded from https://github.com/itdojo/qol.
- 
+
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"        # Directory of this script
 BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh"  # Path to the base_functions.sh file
- 
+
+BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
+
 if [ ! -f "$BASE_FUNCTIONS" ]; then
-  echo "❌  base_functions.sh not found. Downloading from GitHub."
-  wget https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh -O "$BASE_FUNCTIONS" ||
-    {
-      echo "❌  Failed to download base_functions.sh"
-      exit 1
-    }
+  echo "base_functions.sh not found. Downloading from GitHub..."
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS"
+  else
+    wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS"
+  fi || { echo "❌  Failed to download base_functions.sh"; exit 1; }
 fi
- 
+
 # Source the base_functions.sh file
 source "$BASE_FUNCTIONS"
- 
+command -v log_step >/dev/null 2>&1 \
+  || { echo "❌  base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
+
 # ----------------------------------------------------------------------------
 # Ubuntu codenames currently supported by the cappelikan/ppa mainline tool
 # (as of April 2026). Update this list when Ubuntu adds/drops a release.
 # https://launchpad.net/~cappelikan/+archive/ubuntu/ppa
 # ----------------------------------------------------------------------------
 SUPPORTED_UBUNTU_CODENAMES=("jammy" "noble" "plucky" "questing" "resolute")
- 
+
 # ----------------------------------------------------------------------------
 # Helper: is this codename in the given list?
 # ----------------------------------------------------------------------------
@@ -74,7 +82,7 @@ is_supported_codename() {
   done
   return 1
 }
- 
+
 # ----------------------------------------------------------------------------
 # Helper: detect Raspberry Pi reliably and echo the model string on stdout.
 # Prefers /proc/device-tree/model (canonical on modern 64-bit Pi OS), falls
@@ -91,7 +99,7 @@ detect_raspberry_pi() {
   fi
   return 1
 }
- 
+
 # ----------------------------------------------------------------------------
 # Helper: report whether a kernel update is staged for the next reboot.
 # uname -r reflects the RUNNING kernel and does not change without a reboot,
@@ -102,7 +110,7 @@ detect_raspberry_pi() {
 report_kernel_status() {
   local running latest
   running="$(uname -r)"
- 
+
   if [ -d /usr/lib/modules ]; then
     latest="$(ls -1 /usr/lib/modules 2>/dev/null | sort -V | tail -1)"
   elif compgen -G "/boot/vmlinuz-*" >/dev/null; then
@@ -113,46 +121,42 @@ report_kernel_status() {
   else
     latest=""
   fi
- 
+
   echo ""
   if [ -z "$latest" ]; then
-    fstring "Could not determine installed kernel version." "warning"
+    log_warn "Could not determine installed kernel version."
     printf "%s\n" "Running kernel: $running"
   elif [ "$running" = "$latest" ]; then
-    fstring "Kernel is already up to date ($running). No reboot needed." "normal" "bold" "green"
+    log_ok "Kernel is already up to date ($running). No reboot needed."
   else
-    fstring "Kernel update staged for next reboot." "normal" "bold" "green"
+    log_ok "Kernel update staged for next reboot."
     printf "    Running:   %s\n" "$running"
     printf "    Installed: %s\n" "$latest"
     echo ""
-    fstring "Reboot to load the new $latest kernel." "normal" "bold" "red"
+    style_text "🔁  Reboot to load the new $latest kernel." bold red
   fi
   echo ""
 }
- 
+
 # ----------------------------------------------------------------------------
 # Pre-flight
 # ----------------------------------------------------------------------------
-clear                       # Clear the screen
-as_root                     # Confirm running as root
-check_if_linux              # Confirm running on Linux
-trap handle_ctrl_c SIGINT   # Gracefully handle CTRL-C
- 
-fstring "🐧  KERNEL UPDATER FOR LINUX - v.2026-04" "title"
-printline dentistry
- 
+clear          # Clear the screen
+as_root        # Confirm running as root
+check_if_linux # Confirm running on Linux
+
+log_title "🐧  KERNEL UPDATER FOR LINUX  -  v.2026-07"
+
 # Ensure needrestart is installed so the user is told what to restart later
 if ! command -v needrestart >/dev/null; then
-  fstring "Installing needrestart package... " "section"
   install_packages needrestart
-  check_status "needrestart installation" $?
 fi
- 
+
 # ----------------------------------------------------------------------------
 # Detect distro
 # ----------------------------------------------------------------------------
-fstring "Gathering Linux Release Info... " "section"
- 
+log_step "Gathering Linux release info..."
+
 if [ -f /etc/os-release ]; then
   source /etc/os-release
   printf "%s\n" "OS Version: $PRETTY_NAME ($VERSION_CODENAME)"
@@ -160,24 +164,24 @@ else
   echo "❌  /etc/os-release not found. Cannot determine distribution. Exiting."
   exit 1
 fi
- 
+
 # Pick the right "apt suite" codename. For Ubuntu derivatives (Mint, Pop!_OS,
 # elementary, Zorin, KDE neon, Ubuntu MATE), UBUNTU_CODENAME is the upstream
 # Ubuntu release; VERSION_CODENAME is the derivative's own name (e.g. "wilma"
 # on Mint 22). The mainline PPA only ships packages keyed to upstream Ubuntu
 # codenames, so we prefer UBUNTU_CODENAME when present.
 APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
- 
+
 # Detect Raspberry Pi
 pi_model=""
 if pi_model="$(detect_raspberry_pi)"; then
-  printf "%s\n" "🥧 I am a $(fstring "Raspberry Pi" "normal" "bold" "red"): ${pi_model}"
+  printf "%s\n" "🥧 I am a $(style_text "Raspberry Pi" bold red): ${pi_model}"
 fi
- 
+
 # Show currently running kernel
 running_kernel="$(uname -r)"
-printf "%s\n" "🧬  Currently running kernel: $(fstring "$running_kernel" "normal" "bold" "green")"
- 
+printf "%s\n" "🧬  Currently running kernel: $(style_text "$running_kernel" bold green)"
+
 # ----------------------------------------------------------------------------
 # Branch on platform
 # ----------------------------------------------------------------------------
@@ -185,17 +189,17 @@ if [ -n "$pi_model" ]; then
   # ---- Raspberry Pi -------------------------------------------------------
   # Standard apt path is the safe default. rpi-update is opt-in.
   export DEBIAN_FRONTEND=noninteractive
-  fstring "Performing Raspberry Pi kernel update (apt full-upgrade)... " "section"
- 
+  log_step "Performing Raspberry Pi kernel update (apt full-upgrade)..."
+
   install_packages ca-certificates
   apt -y --fix-broken install
   update_repo
   apt -y full-upgrade
   check_status "Raspberry Pi apt full-upgrade" $?
- 
+
   echo ""
-  fstring "rpi-update installs UNRELEASED firmware and kernels." "warning"
-  fstring "It can break a working Pi. Most users should answer 'n' here." "warning"
+  log_warn "rpi-update installs UNRELEASED firmware and kernels."
+  printf "%s\n" "    It can break a working Pi. Most users should answer 'n' here."
   read -r -p "Run rpi-update for bleeding-edge firmware/kernel? [y/N]: " rpi_confirm
   if [[ $rpi_confirm =~ ^[Yy]$ ]]; then
     if ! command -v rpi-update >/dev/null; then
@@ -211,94 +215,89 @@ if [ -n "$pi_model" ]; then
   else
     printf "%s\n" "Skipping rpi-update (recommended)."
   fi
- 
+
 elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
-  printf "%s\n" "👾  I am $(fstring "$PRETTY_NAME" "normal" "bold" "blue")."
-  printf "%s\n" "    $(fstring "Kali" "normal" "normal" "blue") is a rolling release; updating tracks the latest packaged kernel."
+  printf "%s\n" "👾  I am $(style_text "$PRETTY_NAME" bold blue)."
+  printf "%s\n" "    $(style_text "Kali" normal blue) is a rolling release; updating tracks the latest packaged kernel."
   printf "%s\n" "    This requires apt dist-upgrade + full-upgrade."
- 
+
   read -r -p "Proceed with the upgrade? [y/N]: " confirm
   if [[ ! $confirm =~ ^[Yy]$ ]]; then
     printf "Kernel update cancelled.\n"
     exit 0
   fi
- 
-  fstring "Updating $PRETTY_NAME to latest kernel... " "section"
+
+  log_step "Updating $PRETTY_NAME to latest kernel..."
   apt -y --fix-broken install
   update_repo
   apt -y dist-upgrade
   apt -y full-upgrade
   check_status "Kali full-upgrade" $?
- 
+
 elif [ "$ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
   # The mainline PPA is Ubuntu-only, so on Debian we update via the apt
   # suites the system is already configured for. For a newer kernel than
   # stable ships, the user can enable backports manually.
-  printf "%s\n" "ℹ️   I am $(fstring "$PRETTY_NAME" "normal" "bold" "blue")."
+  printf "%s\n" "ℹ️   I am $(style_text "$PRETTY_NAME" bold blue)."
   printf "%s\n" "    Updating via apt against the configured suites."
   printf "%s\n" "    For newer kernels, consider enabling backports manually:"
   printf "%s\n" "        https://backports.debian.org/Instructions/"
- 
-  fstring "Running apt full-upgrade... " "section"
+
+  log_step "Running apt full-upgrade..."
   apt -y --fix-broken install
   update_repo
   apt -y full-upgrade
   check_status "Debian apt full-upgrade" $?
- 
+
 else
   # ---- Ubuntu and Ubuntu derivatives --------------------------------------
   # Covers Ubuntu, Pop!_OS, Linux Mint, Ubuntu MATE/Studio/Kylin/Budgie,
   # elementary OS, Zorin, KDE neon, etc. We use the mainline utility from
   # cappelikan/ppa to install the latest mainline kernel.
-  printf "%s\n" "ℹ️   This is not a $(fstring "Raspberry Pi" "normal" "normal" "red"), $(fstring "Kali" "normal" "normal" "blue") or $(fstring "Debian" "normal" "normal" "blue") installation."
-  printf "%s\n" "    Treating as Ubuntu / Ubuntu-derivative. Apt suite: $(fstring "$APT_CODENAME" "normal" "bold" "green")"
- 
+  printf "%s\n" "ℹ️   This is not a $(style_text "Raspberry Pi" normal red), $(style_text "Kali" normal blue) or $(style_text "Debian" normal blue) installation."
+  printf "%s\n" "    Treating as Ubuntu / Ubuntu-derivative. Apt suite: $(style_text "$APT_CODENAME" bold green)"
+
   if ! is_supported_codename "$APT_CODENAME" "${SUPPORTED_UBUNTU_CODENAMES[@]}"; then
     printf "⚠️   Codename '%s' is not in the mainline PPA's supported list (%s).\n" \
       "$APT_CODENAME" "${SUPPORTED_UBUNTU_CODENAMES[*]}"
     printf "    This usually means the release is too old (EOL) or too new for the PPA.\n"
     printf "    Falling back to apt full-upgrade against the configured suites.\n"
- 
-    fstring "Running apt full-upgrade... " "section"
+
+    log_step "Running apt full-upgrade..."
     apt -y --fix-broken install
     update_repo
     apt -y full-upgrade
     check_status "apt full-upgrade" $?
   else
-    fstring "Adding mainline kernel update PPA... " "section"
+    log_step "Adding mainline kernel update PPA..."
     apt -y --fix-broken install
     if ! command -v add-apt-repository >/dev/null; then
-      fstring "Adding add-apt-repository utility... " "section"
       install_packages software-properties-common
-      check_status "software-properties-common installation" $?
     fi
     add-apt-repository -y ppa:cappelikan/ppa
     check_status "Adding mainline PPA" $?
- 
-    fstring "Installing mainline utility... " "section"
+
+    log_step "Installing mainline utility..."
     update_repo
     install_packages mainline
-    check_status "mainline installation" $?
- 
-    fstring "Installing latest mainline kernel... " "section"
+
+    log_step "Installing latest mainline kernel..."
     mainline install-latest
     check_status "mainline install-latest" $?
- 
+
     apt -y --fix-broken install
   fi
 fi
- 
+
 # ----------------------------------------------------------------------------
 # Report whether a kernel update is staged for next reboot
 # ----------------------------------------------------------------------------
 report_kernel_status
- 
+
 # ----------------------------------------------------------------------------
 # Completion
 # ----------------------------------------------------------------------------
-fstring "🏁  KERNEL UPGRADE COMPLETE  🏁" "title"
-printline dentistry
+log_title "🏁  KERNEL UPGRADE COMPLETE  🏁"
 echo ""
- 

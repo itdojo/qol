@@ -34,44 +34,85 @@ set -euo pipefail
 # ----------------------------------------------------------------------------
 readonly NM_DIR="/etc/NetworkManager/system-connections"
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly VERSION="2026-04"
+readonly VERSION="2026-07"
 
-# ANSI styling, gated on stdout being a tty so logs/pipes stay clean.
-if [[ -t 1 ]] && command -v tput >/dev/null 2>&1; then
-    BOLD="$(tput bold)"
-    RED="$(tput setaf 1)"
-    GRN="$(tput setaf 2)"
-    YEL="$(tput setaf 3)"
-    BLU="$(tput setaf 4)"
-    CYA="$(tput setaf 6)"
-    RST="$(tput sgr0)"
+# ----------------------------------------------------------------------------
+# Output helpers — repo-standard theme (keep in sync with linux/base_functions.sh)
+# ----------------------------------------------------------------------------
+# Decide once whether to emit ANSI colors. Colors are skipped when stdout is
+# not a terminal (pipes, logs) or NO_COLOR is set.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    QOL_COLOR=1
 else
-    BOLD="" ; RED="" ; GRN="" ; YEL="" ; BLU="" ; CYA="" ; RST=""
+    QOL_COLOR=""
 fi
 
-# ----------------------------------------------------------------------------
-# Output helpers (drawline / title / section / status lines)
-# ----------------------------------------------------------------------------
-drawline() {
-    local cols
-    cols="$(tput cols 2>/dev/null || echo 80)"
-    printf '%*s\n' "$cols" '' | tr ' ' '-'
+# Print a separator line the width of the terminal.
+# Usage: printline [solid|dentistry]
+printline() {
+    local sep cols line
+    case "${1:-solid}" in
+        solid)     sep="─" ;;
+        dentistry) sep="⏥" ;;
+        *)         sep="─" ;;
+    esac
+    cols="$(tput cols 2>/dev/null)" || cols=80
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    printf -v line '%*s' "$cols" ''
+    printf '%s\n' "${line// /$sep}"
+}
+
+# Print styled text with no separator.
+# Usage: style_text "text" [normal|bold] [red|green|yellow|blue]
+style_text() {
+    local text="$1" weight="${2:-normal}" color="${3:-}"
+    local weight_code color_code sgr
+    case "$weight" in
+        normal) weight_code=0 ;;
+        bold)   weight_code=1 ;;
+        *)      weight_code=0 ;;
+    esac
+    case "$color" in
+        red)    color_code=31 ;;
+        green)  color_code=32 ;;
+        yellow) color_code=33 ;;
+        blue)   color_code=34 ;;
+        *)      color_code="" ;;
+    esac
+    if [[ -z "$QOL_COLOR" ]] || [[ -z "$color_code" && "$weight_code" -eq 0 ]]; then
+        printf '%s\n' "$text"
+        return 0
+    fi
+    if [[ -n "$color_code" ]]; then
+        sgr="${weight_code};${color_code}"
+    else
+        sgr="$weight_code"
+    fi
+    printf '\033[%sm%s\033[0m\n' "$sgr" "$text"
+}
+
+# Separator + styled text: the repo-standard log line.
+format_font() {
+    printline
+    style_text "$1" "${2:-bold}" "${3:-yellow}"
 }
 
 title() {
-    drawline
-    printf "%s%s%s\n" "$BOLD" "$1" "$RST"
-    drawline
+    printline dentistry
+    style_text "$1" bold blue
+    printline dentistry
 }
 
-section() {
-    printf "\n%s%s  %s%s\n" "$BOLD" "$CYA" "$1" "$RST"
-}
+section() { format_font "🔸  $1" bold yellow;   }
+ok()      { format_font "✅  $1" bold green;    }
+warn()    { format_font "⚠️   $1" bold yellow;  }
+fail()    { format_font "❌  $1" bold red >&2;  }
+info()    { format_font "ℹ️   $1" bold blue;    }
 
-ok()    { printf "  %s✅  %s%s\n" "$GRN" "$1" "$RST"; }
-warn()  { printf "  %s⚠️   %s%s\n" "$YEL" "$1" "$RST"; }
-fail()  { printf "  %s❌  %s%s\n" "$RED" "$1" "$RST" >&2; }
-info()  { printf "  %sℹ️   %s%s\n" "$BLU" "$1" "$RST"; }
+# Inline prompt feedback (no separator; used inside input loops so invalid
+# entries don't fill the screen with lines).
+prompt_warn() { style_text "  ⚠️   $1" bold yellow; }
+prompt_err()  { style_text "  ❌  $1" bold red >&2; }
 
 check_status() {
     local desc="$1" rc="$2"
@@ -166,7 +207,8 @@ discover_interfaces() {
 
 select_interface() {
     local i
-    printf "\n  %sAvailable interfaces:%s\n" "$BOLD" "$RST"
+    printf "\n"
+    style_text "  Available interfaces:" bold
     for i in "${!IFACE_DEV[@]}"; do
         printf "    [%d] %-12s %-10s (%s)\n" \
             "$((i+1))" "${IFACE_DEV[$i]}" "${IFACE_TYPE[$i]}" "${IFACE_STATE[$i]}"
@@ -180,7 +222,7 @@ select_interface() {
             SELECTED_TYPE="${IFACE_TYPE[$((sel-1))]}"
             return 0
         fi
-        warn "Invalid selection: '$sel'"
+        prompt_warn "Invalid selection: '$sel'"
     done
 }
 
@@ -189,16 +231,16 @@ select_interface() {
 # ----------------------------------------------------------------------------
 validate_ssid() {
     local ssid="$1"
-    [[ -z "$ssid" ]] && { fail "SSID cannot be empty."; return 1; }
-    (( ${#ssid} > 32 )) && { fail "SSID must be 32 characters or fewer."; return 1; }
+    [[ -z "$ssid" ]] && { prompt_err "SSID cannot be empty."; return 1; }
+    (( ${#ssid} > 32 )) && { prompt_err "SSID must be 32 characters or fewer."; return 1; }
     return 0
 }
 
 validate_psk() {
     local psk="$1"
-    [[ -z "$psk" ]] && { fail "Passphrase cannot be empty."; return 1; }
+    [[ -z "$psk" ]] && { prompt_err "Passphrase cannot be empty."; return 1; }
     (( ${#psk} < 8 || ${#psk} > 63 )) && {
-        fail "Passphrase must be 8-63 characters (got ${#psk})."
+        prompt_err "Passphrase must be 8-63 characters (got ${#psk})."
         return 1
     }
     return 0
@@ -207,14 +249,14 @@ validate_psk() {
 validate_ipv4() {
     local ip="$1"
     [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || {
-        fail "Not a valid IPv4 address: '$ip'"
+        prompt_err "Not a valid IPv4 address: '$ip'"
         return 1
     }
     local IFS=. octets octet
     read -ra octets <<< "$ip"
     for octet in "${octets[@]}"; do
         if (( 10#$octet > 255 )); then
-            fail "Octet out of range in '$ip'"
+            prompt_err "Octet out of range in '$ip'"
             return 1
         fi
     done
@@ -224,7 +266,7 @@ validate_ipv4() {
 validate_cidr_bits() {
     local bits="$1"
     if [[ ! "$bits" =~ ^[0-9]+$ ]] || (( bits < 1 || bits > 32 )); then
-        fail "Invalid CIDR prefix: '$bits' (must be 1-32)"
+        prompt_err "Invalid CIDR prefix: '$bits' (must be 1-32)"
         return 1
     fi
     return 0
@@ -277,7 +319,7 @@ prompt_connection_type() {
         case "$sel" in
             1) WANT_TYPE="wifi"     ; return 0 ;;
             2) WANT_TYPE="ethernet" ; return 0 ;;
-            *) warn "Invalid: '$sel'" ;;
+            *) prompt_warn "Invalid: '$sel'" ;;
         esac
     done
 }
@@ -330,7 +372,7 @@ prompt_wifi_details() {
         case "$sel" in
             1) KEY_MGMT="wpa-psk" ; break ;;
             2) KEY_MGMT="sae"     ; break ;;
-            *) warn "Invalid: '$sel'" ;;
+            *) prompt_warn "Invalid: '$sel'" ;;
         esac
     done
 
@@ -354,7 +396,7 @@ prompt_ipv4_method() {
         case "$choice" in
             1) IP_METHOD="auto"   ; return 0 ;;
             2) IP_METHOD="manual" ; prompt_static_ipv4 ; return 0 ;;
-            *) warn "Invalid: '$choice'" ;;
+            *) prompt_warn "Invalid: '$choice'" ;;
         esac
     done
 }
@@ -370,7 +412,7 @@ prompt_ipv6_method() {
         case "$choice" in
             1) IPV6_METHOD="auto"   ; return 0 ;;
             2) IPV6_METHOD="ignore" ; return 0 ;;
-            *) warn "Invalid: '$choice'" ;;
+            *) prompt_warn "Invalid: '$choice'" ;;
         esac
     done
 }
@@ -499,9 +541,7 @@ main() {
 
     reload_and_optionally_activate
 
-    drawline
-    printf "%s🏁  Done. Profile '%s' created.%s\n" "$BOLD" "$CONN_ID" "$RST"
-    drawline
+    title "🏁  Done. Profile '$CONN_ID' created."
     echo ""
 }
 

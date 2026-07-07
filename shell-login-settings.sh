@@ -1,24 +1,46 @@
 #!/bin/bash
+# shellcheck shell=bash
+#
+# shell-login-settings.sh — personal login-shell helpers.
+# Source this from .bashrc / .zshrc:
+#     source /path/to/shell-login-settings.sh
+#
+# Output here is deliberately compact (no separator lines) because these
+# functions run inside interactive login shells.
 
-# My shell settings
-
+# Authenticate to GitHub over SSH, reusing a running ssh-agent when possible.
 gitssh() {
-    local github_ssh_key="github-office"
+    local key_name="github-office"
+    local key_file="$HOME/.ssh/$key_name"
 
-    if [[ ! -f ~/.ssh/"$github_ssh_key" ]]; then
-        printf "%s\n" "⚠️  No SSH key named '$github_ssh_key' found." "Cannot authenticate to GitHub without SSH key." >&2
+    if [ ! -f "$key_file" ]; then
+        printf '%s\n' "⚠️   No SSH key named '$key_name' found in ~/.ssh." \
+                      "    Cannot authenticate to GitHub without an SSH key." >&2
         return 1
     fi
 
-    eval "$(ssh-agent)" >/dev/null
-    ssh-add ~/.ssh/"$github_ssh_key" >/dev/null
+    # ssh-add -l returns 2 when it can't reach an agent; only then start one,
+    # so repeated calls don't leak a new ssh-agent process each time.
+    local agent_rc=0
+    ssh-add -l >/dev/null 2>&1 || agent_rc=$?
+    if [ "$agent_rc" -eq 2 ]; then
+        if ! eval "$(ssh-agent -s)" >/dev/null; then
+            printf '%s\n' "❌  Could not start ssh-agent." >&2
+            return 1
+        fi
+    fi
 
-    if ! ssh -T git@github.com 2>&1 | grep -q "You've successfully authenticated"; then
-        printf "%s\n" "❌  GitHub Authentication: Failed." >&2
+    if ! ssh-add "$key_file" >/dev/null 2>&1; then
+        printf '%s\n' "❌  Could not add '$key_name' to the ssh-agent." >&2
         return 1
+    fi
+
+    # GitHub always closes the test connection, so check the banner text
+    # rather than the ssh exit status.
+    if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
+        printf '%s\n' "✅  GitHub Authentication: Success."
     else
-        printf "%s\n" "✅  GitHub Authentication: Success." >&2
+        printf '%s\n' "❌  GitHub Authentication: Failed." >&2
+        return 1
     fi
-} 
-
-
+}

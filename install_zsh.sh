@@ -16,6 +16,7 @@
 # Architecture-agnostic: x86_64, arm64/aarch64, armv7l (Pi, Gateworks, etc).
 #
 # Usage:  ./install_zsh.sh
+# Do not run as root.
 #
 # The script is idempotent: rerunning it should not duplicate config or fail.
 # ----------------------------------------------------------------------------
@@ -35,42 +36,78 @@ NERD_FONTS_VERSION="v3.3.0"
 PLUGINS=(zsh-autosuggestions zsh-syntax-highlighting zsh-completions)
 
 # ---------------------------------------------------------------------------
-# Pretty output
+# Pretty output — repo-standard theme (keep in sync with linux/base_functions.sh)
 # ---------------------------------------------------------------------------
+# Decide once whether to emit ANSI colors. Colors are skipped when stdout is
+# not a terminal (pipes, logs, cron) or NO_COLOR is set.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    QOL_COLOR=1
+else
+    QOL_COLOR=""
+fi
+
+# Print a separator line the width of the terminal.
+# Usage: printline [solid|bullet|ibeam|star|plus|diamond|dentistry]
 printline() {
-    printf "%.s─" $(seq 1 "$(tput cols)")    # Line style ─────────
-    # printf "%.s∙" $(seq 1 "$(tput cols)")  # Line style ∙∙∙∙∙∙∙∙∙
-    # printf "%.s⌶" $(seq 1 "$(tput cols)")  # Line style ⌶⌶⌶⌶⌶⌶⌶⌶
-    # printf "%.s☆" $(seq 1 "$(tput cols)")  # Line style ☆☆☆☆☆☆☆☆☆   
-    # printf "%.s⏥" "$(seq 1 "$(tput cols)") # Line style ⏥⏥⏥⏥⏥  
+    local sep cols line
+    case "${1:-solid}" in
+        solid)     sep="─" ;;   # ─────────────
+        bullet)    sep="•" ;;   # •••••••••••••
+        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+        star)      sep="★" ;;   # ★★★★★★★★★★★★★
+        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛
+        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆
+        dentistry) sep="⏥" ;;  # ⏥⏥⏥⏥⏥⏥⏥⏥
+        *)         sep="─" ;;
+    esac
+    # Fall back to 80 columns when there is no TTY (cron, CI, pipes, etc.)
+    cols="$(tput cols 2>/dev/null)" || cols=80
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    printf -v line '%*s' "$cols" ''
+    printf '%s\n' "${line// /$sep}"
 }
 
-format_font() {
-    local text="$1"
-    local weight="${2:-bold}"
-    local color="${3:-yellow}"
-    local color_code weight_code
-    case "$color" in
-        blue)   color_code=34 ;;
-        red)    color_code=31 ;;
-        green)  color_code=32 ;;
-        yellow) color_code=33 ;;
-        *)      color_code=33 ;;
-    esac
+# Print styled text with no separator (usable inline via command substitution).
+# Usage: style_text "text" [normal|bold|light] [red|green|yellow|blue]
+style_text() {
+    local text="$1" weight="${2:-normal}" color="${3:-}"
+    local weight_code color_code sgr
     case "$weight" in
         normal) weight_code=0 ;;
         bold)   weight_code=1 ;;
-        *)      weight_code=1 ;;
+        light)  weight_code=2 ;;
+        *)      weight_code=0 ;;
     esac
+    case "$color" in
+        red)    color_code=31 ;;
+        green)  color_code=32 ;;
+        yellow) color_code=33 ;;
+        blue)   color_code=34 ;;
+        *)      color_code="" ;;
+    esac
+    if [[ -z "$QOL_COLOR" ]] || [[ -z "$color_code" && "$weight_code" -eq 0 ]]; then
+        printf '%s\n' "$text"
+        return 0
+    fi
+    if [[ -n "$color_code" ]]; then
+        sgr="${weight_code};${color_code}"
+    else
+        sgr="$weight_code"
+    fi
+    printf '\033[%sm%s\033[0m\n' "$sgr" "$text"
+}
+
+# Separator + styled text: the repo-standard log line.
+format_font() {
     printline
-    printf '\033[%s;%sm%s\033[0m\n' "$weight_code" "$color_code" "$text"
+    style_text "$1" "${2:-bold}" "${3:-yellow}"
 }
 
 log_info() { format_font "ℹ️   $1" bold blue;   }
 log_step() { format_font "📦  $1" bold yellow; }
 log_ok()   { format_font "✅  $1" bold green;  }
 log_warn() { format_font "⚠️   $1" bold yellow; }
-log_err()  { format_font "❌  $1" bold red;    }
+log_err()  { format_font "❌  $1" bold red >&2; }
 
 # ---------------------------------------------------------------------------
 # Safety

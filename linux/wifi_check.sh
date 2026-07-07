@@ -1,58 +1,54 @@
 #!/usr/bin/env bash
+#
+# wifi_check.sh
+#
+# Print the SSID of the Wi-Fi network this device is associated with, or a
+# "not connected" message if there is no association. Linux only.
+#
+# Usage:
+#   ./wifi_check.sh                       # run directly
+#   source /path/to/wifi_check.sh         # e.g. from .bashrc / .zshrc
+#
+# NOTE: deliberately no `set -e` — this file is meant to be sourced from
+# interactive shells, and the probing commands are expected to "fail" on
+# machines that simply have no Wi-Fi.
 
-# This script checks the current SSID of the WiFi network
-# that the device is currently associated with. If the device
-# is not associated with a WiFi network, it will return "No WiFi Association".
+wifi_check() {
+    if [ "$(uname -s)" != "Linux" ]; then
+        printf '%s\n' " ❌ wifi_check only supports Linux."
+        return 1
+    fi
 
-set -e
+    if ! command -v nmcli >/dev/null 2>&1 \
+        && ! command -v iw >/dev/null 2>&1 \
+        && ! command -v iwgetid >/dev/null 2>&1; then
+        printf '%s\n' " ❌ None of nmcli, iw, or iwgetid are installed. Cannot determine Wi-Fi status."
+        return 1
+    fi
 
-# Function to check if the script is running on Linux
-check_os() {
-        if [[ "$(uname)" != "Linux" ]]; then
-                printf "%s\n" "This script only runs on Linux."
-                exit 1
-        fi
+    local ssid=""
+
+    # Try the most reliable tool first: nmcli, then iw, then iwgetid.
+    if command -v nmcli >/dev/null 2>&1; then
+        # -t output is colon-separated with literal colons escaped as '\:'.
+        ssid="$(nmcli -t -f active,ssid device wifi list 2>/dev/null \
+            | awk -F: '$1 == "yes" { sub(/^yes:/, ""); gsub(/\\:/, ":"); print; exit }')"
+    fi
+    if [ -z "$ssid" ] && command -v iw >/dev/null 2>&1; then
+        ssid="$(iw dev 2>/dev/null \
+            | awk '$1 == "ssid" { sub(/^[[:space:]]*ssid[[:space:]]+/, ""); print; exit }')"
+    fi
+    if [ -z "$ssid" ] && command -v iwgetid >/dev/null 2>&1; then
+        ssid="$(iwgetid --raw 2>/dev/null)"
+    fi
+
+    if [ -n "$ssid" ]; then
+        printf '%s\n' " 🛜 Current SSID: $ssid"
+    else
+        printf '%s\n' " ❌ Not connected to WiFi."
+    fi
 }
 
-# Function to check for required commands
-check_commands() {
-        for cmd in iwgetid iw nmcli; do
-                if command -v $cmd &> /dev/null; then
-                        return 0
-                fi
-        done
-        printf "%s\n" "Neither iw, iwgetid, nor nmcli are installed. Cannot determine WiFi status."
-        exit 1
-}
-
-# Function to get the current SSID
-get_ssid() {
-        local ssid=""
-        if command -v iw &> /dev/null; then
-                ssid=$(iw dev | grep ssid | sed s/'ssid'// | awk '{gsub(/\t/,""); print $0}')
-        elif command -v nmcli &> /dev/null; then
-                ssid=$(nmcli -t -f active,ssid dev wifi | grep -E '^yes' | cut -d: -f2)
-        elif command -v iwgetid &> /dev/null; then
-                ssid=$(iwgetid --raw)
-        else
-                printf "%s\n" "No suitable command found to determine WiFi status."
-                exit 1
-        fi
-
-        # Debug statement to check the value of ssid
-
-        if [[ -n "$ssid" ]]; then
-                printf "%s\n" " 🛜 Current SSID: $ssid"
-        else
-                printf "%s\n" " ❌ Not connected to WiFi."
-        fi
-}
-
-# Main script execution
-main() {
-        check_os
-        check_commands
-        get_ssid
-}
-
-main
+# Runs whether this file is executed or sourced; the status propagates
+# either way (exit code when executed, return code when sourced).
+wifi_check "$@"
