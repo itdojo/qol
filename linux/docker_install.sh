@@ -33,6 +33,11 @@
 #   /etc/modules-load.d/docker.conf so they survive reboot, and on a stock
 #   kernel install linux-modules-extra-$(uname -r) when any are missing.
 #   Fixes dockerd dying on "MASQUERADE/addrtype ... missing kernel module?".
+# - Auto-select the nftables firewall backend on kernels that lack the legacy
+#   xt_MASQUERADE target but ship native nft masquerade (e.g. Gateworks Venice
+#   and some VPS images). ensure_docker_firewall_backend() writes
+#   "firewall-backend": "nftables" to /etc/docker/daemon.json (Docker >= 29)
+#   instead of letting the daemon fail. No-op when xt_MASQUERADE is available.
 #
 # This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
 # The base_functions.sh file should be available in the same directory as this script.
@@ -152,17 +157,76 @@ ensure_docker_kernel_modules() {
   [ ${#missing[@]} -eq 0 ] && { echo "All required modules present."; return 0; }
 
   log_warn "Kernel modules missing for the running kernel ($(uname -r)): ${missing[*]}"
-  printf "    Docker's default bridge network can't be created without them.\n"
-  printf "    They ship in linux-modules-extra; attempting to install it...\n"
-  # Non-fatal: on a stock kernel this fixes it; on a custom/appliance kernel
-  # the package won't exist and install_packages will just report FAILED.
+  printf "    Docker's default (iptables) bridge network needs these.\n"
+  # On a stock kernel the extra package supplies them; on a custom/appliance
+  # kernel (VPS, Gateworks, etc.) it won't exist. Non-fatal either way — if
+  # xt_MASQUERADE is the gap, ensure_docker_firewall_backend() may still get
+  # Docker running via the native nftables backend.
   if install_packages "linux-modules-extra-$(uname -r)"; then
     for m in "${missing[@]}"; do modprobe "$m" 2>/dev/null || true; done
   else
-    printf "⚠️   Could not install linux-modules-extra-%s.\n" "$(uname -r)"
-    printf "    You are likely on a custom/minimal kernel that lacks these netfilter\n"
-    printf "    modules. Docker cannot run its default bridge network here until the\n"
-    printf "    kernel provides %s.\n" "${missing[*]}"
+    printf "ℹ️   No linux-modules-extra-%s package (custom/minimal kernel).\n" "$(uname -r)"
+    printf "    Will try the nftables firewall backend next if applicable.\n"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Helper: merge "firewall-backend": "nftables" into /etc/docker/daemon.json
+# without clobbering an existing config. Returns:
+#   0 = key is set (written now or already present)
+#   2 = a daemon.json exists that we couldn't safely merge (no jq)
+# ----------------------------------------------------------------------------
+enable_nftables_backend() {
+  local f=/etc/docker/daemon.json
+  mkdir -p /etc/docker
+  if [ ! -s "$f" ]; then
+    printf '{\n  "firewall-backend": "nftables"\n}\n' > "$f"
+    return 0
+  fi
+  grep -q '"firewall-backend"' "$f" && return 0   # respect an existing setting
+  if command -v jq >/dev/null 2>&1; then
+    local merged
+    merged="$(jq '. + {"firewall-backend":"nftables"}' "$f" 2>/dev/null)" \
+      && printf '%s\n' "$merged" > "$f" && return 0
+  fi
+  return 2
+}
+
+# ----------------------------------------------------------------------------
+# Helper: pick Docker's firewall backend. Docker's default path uses the legacy
+# iptables MASQUERADE target (xt_MASQUERADE). Some vendor/embedded kernels
+# (e.g. Gateworks Venice, some VPS images) omit CONFIG_NETFILTER_XT_TARGET_
+# MASQUERADE while still shipping native nftables NAT (CONFIG_NF_NAT_MASQUERADE,
+# nft_masq). Docker >= 29 can use those directly via "firewall-backend":
+# "nftables", so on such a kernel we switch backends instead of dying.
+# Only acts when xt_MASQUERADE is genuinely unavailable; otherwise no-op.
+# ----------------------------------------------------------------------------
+ensure_docker_firewall_backend() {
+  command -v docker >/dev/null 2>&1 || return 0
+  command -v modprobe >/dev/null 2>&1 || return 0
+
+  # xt_MASQUERADE present (as module or built-in)? Then the default backend is
+  # fine — don't touch daemon.json.
+  modprobe xt_MASQUERADE 2>/dev/null && return 0
+
+  local dver
+  dver=$(docker --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
+  if [ "${dver:-0}" -ge 29 ] && modprobe nft_masq 2>/dev/null; then
+    log_step "xt_MASQUERADE absent; switching Docker to the nftables backend..."
+    if enable_nftables_backend; then
+      log_ok "Set \"firewall-backend\": \"nftables\" in /etc/docker/daemon.json."
+      printf "    This kernel lacks xt_MASQUERADE but has native nft masquerade,\n"
+      printf "    so Docker runs its bridge NAT via the 'ip docker-bridges' table.\n"
+    else
+      log_warn "Docker needs the nftables backend here, but /etc/docker/daemon.json"
+      printf "    already exists and jq isn't installed to merge it safely.\n"
+      printf "    Add this key manually, then restart docker:\n"
+      printf '        "firewall-backend": "nftables"\n'
+    fi
+  else
+    log_warn "xt_MASQUERADE is missing and the nftables backend isn't available"
+    printf "    (needs Docker >= 29 and kernel nft masq support). Docker's bridge\n"
+    printf "    network can't start until the kernel provides one of them.\n"
   fi
 }
 
@@ -176,6 +240,7 @@ ensure_docker_kernel_modules() {
 # ----------------------------------------------------------------------------
 enable_and_start_docker() {
   ensure_docker_kernel_modules
+  ensure_docker_firewall_backend
   log_step "Enabling and starting the Docker service..."
   # Clear any restart-limit backoff from a previous failed attempt so this
   # start is actually tried rather than refused ("start request repeated...").
