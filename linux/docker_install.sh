@@ -28,6 +28,11 @@
 #   every install path now calls enable_and_start_docker(), which trusts
 #   `systemctl is-active` (not $?), and on failure dumps the daemon log and
 #   exits non-zero instead of reporting SUCCESS over a dead daemon.
+# - Load and persist the netfilter kernel modules Docker's bridge network
+#   needs (ensure_docker_kernel_modules): modprobe the required set, write
+#   /etc/modules-load.d/docker.conf so they survive reboot, and on a stock
+#   kernel install linux-modules-extra-$(uname -r) when any are missing.
+#   Fixes dockerd dying on "MASQUERADE/addrtype ... missing kernel module?".
 #
 # This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
 # The base_functions.sh file should be available in the same directory as this script.
@@ -107,6 +112,61 @@ docker_smoke_test() {
 }
 
 # ----------------------------------------------------------------------------
+# Helper: make sure the kernel modules Docker's default bridge network needs
+# are loaded, and persist them across reboots.
+#
+# On stock desktop/server kernels these autoload on demand, but on minimal or
+# vendor kernels (VPS, appliance/gateway images) the netfilter NAT extensions
+# are not present, and dockerd then dies creating docker0 with errors like
+# "MASQUERADE ... missing kernel module?" / "Couldn't load match `addrtype'".
+#
+# Strategy: try to load each module; anything that is already loaded or built
+# into the kernel is fine. Whatever genuinely cannot be loaded is collected and,
+# if we're on a stock kernel, we try the linux-modules-extra package that ships
+# them. This never exits on its own — the authoritative pass/fail is the
+# is-active check in enable_and_start_docker().
+# ----------------------------------------------------------------------------
+DOCKER_KERNEL_MODULES=(overlay br_netfilter nf_conntrack nf_nat nf_tables
+                       nft_compat nft_chain_nat xt_conntrack xt_addrtype
+                       xt_MASQUERADE xt_nat iptable_nat iptable_filter ip_tables)
+
+ensure_docker_kernel_modules() {
+  # Only meaningful where modprobe exists (skip gracefully otherwise).
+  command -v modprobe >/dev/null 2>&1 || return 0
+
+  log_step "Ensuring Docker's kernel modules are available..."
+  local m missing=()
+  for m in "${DOCKER_KERNEL_MODULES[@]}"; do
+    # Already loaded, loadable, or built-in ("(builtin)" via modinfo) → fine.
+    lsmod 2>/dev/null | grep -qw "$m" && continue
+    modprobe "$m" 2>/dev/null && continue
+    modinfo "$m" >/dev/null 2>&1 && continue
+    missing+=("$m")
+  done
+
+  # Persist across reboots so a future boot doesn't regress to a dead daemon.
+  printf '# Loaded by docker_install.sh for Docker bridge networking.\n%s\n' \
+    "$(printf '%s\n' "${DOCKER_KERNEL_MODULES[@]}")" \
+    > /etc/modules-load.d/docker.conf 2>/dev/null || true
+
+  [ ${#missing[@]} -eq 0 ] && { echo "All required modules present."; return 0; }
+
+  log_warn "Kernel modules missing for the running kernel ($(uname -r)): ${missing[*]}"
+  printf "    Docker's default bridge network can't be created without them.\n"
+  printf "    They ship in linux-modules-extra; attempting to install it...\n"
+  # Non-fatal: on a stock kernel this fixes it; on a custom/appliance kernel
+  # the package won't exist and install_packages will just report FAILED.
+  if install_packages "linux-modules-extra-$(uname -r)"; then
+    for m in "${missing[@]}"; do modprobe "$m" 2>/dev/null || true; done
+  else
+    printf "⚠️   Could not install linux-modules-extra-%s.\n" "$(uname -r)"
+    printf "    You are likely on a custom/minimal kernel that lacks these netfilter\n"
+    printf "    modules. Docker cannot run its default bridge network here until the\n"
+    printf "    kernel provides %s.\n" "${missing[*]}"
+  fi
+}
+
+# ----------------------------------------------------------------------------
 # Helper: enable + start docker.service, then VERIFY the daemon is actually
 # running. `systemctl enable --now` (and get.docker.com) can return 0 while the
 # daemon dies immediately afterward, so we trust `is-active`, not $?. A dead
@@ -115,7 +175,11 @@ docker_smoke_test() {
 # packaging problem) is visible instead of buried under a green SUCCESS.
 # ----------------------------------------------------------------------------
 enable_and_start_docker() {
+  ensure_docker_kernel_modules
   log_step "Enabling and starting the Docker service..."
+  # Clear any restart-limit backoff from a previous failed attempt so this
+  # start is actually tried rather than refused ("start request repeated...").
+  systemctl reset-failed docker.service docker.socket >/dev/null 2>&1
   systemctl enable docker --now 2>/dev/null
   if systemctl is-active --quiet docker; then
     printf "%s\n" "🐳 Docker Service Status: $(style_text "active" bold green)"
