@@ -23,6 +23,21 @@
 #   base_functions.sh); replaced the old fstring calls.
 # - Root check now happens before any prompts; 'q' at the uninstall prompt
 #   aborts the installer instead of falling through.
+# - Verify the daemon actually STARTS. `systemctl enable --now` (and
+#   get.docker.com) can return 0 while dockerd dies immediately afterward, so
+#   every install path now calls enable_and_start_docker(), which trusts
+#   `systemctl is-active` (not $?), and on failure dumps the daemon log and
+#   exits non-zero instead of reporting SUCCESS over a dead daemon.
+# - Load and persist the netfilter kernel modules Docker's bridge network
+#   needs (ensure_docker_kernel_modules): modprobe the required set, write
+#   /etc/modules-load.d/docker.conf so they survive reboot, and on a stock
+#   kernel install linux-modules-extra-$(uname -r) when any are missing.
+#   Fixes dockerd dying on "MASQUERADE/addrtype ... missing kernel module?".
+# - Auto-select the nftables firewall backend on kernels that lack the legacy
+#   xt_MASQUERADE target but ship native nft masquerade (e.g. Gateworks Venice
+#   and some VPS images). ensure_docker_firewall_backend() writes
+#   "firewall-backend": "nftables" to /etc/docker/daemon.json (Docker >= 29)
+#   instead of letting the daemon fail. No-op when xt_MASQUERADE is available.
 #
 # This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
 # The base_functions.sh file should be available in the same directory as this script.
@@ -102,6 +117,154 @@ docker_smoke_test() {
 }
 
 # ----------------------------------------------------------------------------
+# Helper: make sure the kernel modules Docker's default bridge network needs
+# are loaded, and persist them across reboots.
+#
+# On stock desktop/server kernels these autoload on demand, but on minimal or
+# vendor kernels (VPS, appliance/gateway images) the netfilter NAT extensions
+# are not present, and dockerd then dies creating docker0 with errors like
+# "MASQUERADE ... missing kernel module?" / "Couldn't load match `addrtype'".
+#
+# Strategy: try to load each module; anything that is already loaded or built
+# into the kernel is fine. Whatever genuinely cannot be loaded is collected and,
+# if we're on a stock kernel, we try the linux-modules-extra package that ships
+# them. This never exits on its own — the authoritative pass/fail is the
+# is-active check in enable_and_start_docker().
+# ----------------------------------------------------------------------------
+DOCKER_KERNEL_MODULES=(overlay br_netfilter nf_conntrack nf_nat nf_tables
+                       nft_compat nft_chain_nat xt_conntrack xt_addrtype
+                       xt_MASQUERADE xt_nat iptable_nat iptable_filter ip_tables)
+
+ensure_docker_kernel_modules() {
+  # Only meaningful where modprobe exists (skip gracefully otherwise).
+  command -v modprobe >/dev/null 2>&1 || return 0
+
+  log_step "Ensuring Docker's kernel modules are available..."
+  local m missing=()
+  for m in "${DOCKER_KERNEL_MODULES[@]}"; do
+    # Already loaded, loadable, or built-in ("(builtin)" via modinfo) → fine.
+    lsmod 2>/dev/null | grep -qw "$m" && continue
+    modprobe "$m" 2>/dev/null && continue
+    modinfo "$m" >/dev/null 2>&1 && continue
+    missing+=("$m")
+  done
+
+  # Persist across reboots so a future boot doesn't regress to a dead daemon.
+  printf '# Loaded by docker_install.sh for Docker bridge networking.\n%s\n' \
+    "$(printf '%s\n' "${DOCKER_KERNEL_MODULES[@]}")" \
+    > /etc/modules-load.d/docker.conf 2>/dev/null || true
+
+  [ ${#missing[@]} -eq 0 ] && { echo "All required modules present."; return 0; }
+
+  log_warn "Kernel modules missing for the running kernel ($(uname -r)): ${missing[*]}"
+  printf "    Docker's default (iptables) bridge network needs these.\n"
+  # On a stock kernel the extra package supplies them; on a custom/appliance
+  # kernel (VPS, Gateworks, etc.) it won't exist. Non-fatal either way — if
+  # xt_MASQUERADE is the gap, ensure_docker_firewall_backend() may still get
+  # Docker running via the native nftables backend.
+  if install_packages "linux-modules-extra-$(uname -r)"; then
+    for m in "${missing[@]}"; do modprobe "$m" 2>/dev/null || true; done
+  else
+    printf "ℹ️   No linux-modules-extra-%s package (custom/minimal kernel).\n" "$(uname -r)"
+    printf "    Will try the nftables firewall backend next if applicable.\n"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Helper: merge "firewall-backend": "nftables" into /etc/docker/daemon.json
+# without clobbering an existing config. Returns:
+#   0 = key is set (written now or already present)
+#   2 = a daemon.json exists that we couldn't safely merge (no jq)
+# ----------------------------------------------------------------------------
+enable_nftables_backend() {
+  local f=/etc/docker/daemon.json
+  mkdir -p /etc/docker
+  if [ ! -s "$f" ]; then
+    printf '{\n  "firewall-backend": "nftables"\n}\n' > "$f"
+    return 0
+  fi
+  grep -q '"firewall-backend"' "$f" && return 0   # respect an existing setting
+  if command -v jq >/dev/null 2>&1; then
+    local merged
+    merged="$(jq '. + {"firewall-backend":"nftables"}' "$f" 2>/dev/null)" \
+      && printf '%s\n' "$merged" > "$f" && return 0
+  fi
+  return 2
+}
+
+# ----------------------------------------------------------------------------
+# Helper: pick Docker's firewall backend. Docker's default path uses the legacy
+# iptables MASQUERADE target (xt_MASQUERADE). Some vendor/embedded kernels
+# (e.g. Gateworks Venice, some VPS images) omit CONFIG_NETFILTER_XT_TARGET_
+# MASQUERADE while still shipping native nftables NAT (CONFIG_NF_NAT_MASQUERADE,
+# nft_masq). Docker >= 29 can use those directly via "firewall-backend":
+# "nftables", so on such a kernel we switch backends instead of dying.
+# Only acts when xt_MASQUERADE is genuinely unavailable; otherwise no-op.
+# ----------------------------------------------------------------------------
+ensure_docker_firewall_backend() {
+  command -v docker >/dev/null 2>&1 || return 0
+  command -v modprobe >/dev/null 2>&1 || return 0
+
+  # xt_MASQUERADE present (as module or built-in)? Then the default backend is
+  # fine — don't touch daemon.json.
+  modprobe xt_MASQUERADE 2>/dev/null && return 0
+
+  local dver
+  dver=$(docker --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
+  if [ "${dver:-0}" -ge 29 ] && modprobe nft_masq 2>/dev/null; then
+    log_step "xt_MASQUERADE absent; switching Docker to the nftables backend..."
+    if enable_nftables_backend; then
+      log_ok "Set \"firewall-backend\": \"nftables\" in /etc/docker/daemon.json."
+      printf "    This kernel lacks xt_MASQUERADE but has native nft masquerade,\n"
+      printf "    so Docker runs its bridge NAT via the 'ip docker-bridges' table.\n"
+    else
+      log_warn "Docker needs the nftables backend here, but /etc/docker/daemon.json"
+      printf "    already exists and jq isn't installed to merge it safely.\n"
+      printf "    Add this key manually, then restart docker:\n"
+      printf '        "firewall-backend": "nftables"\n'
+    fi
+  else
+    log_warn "xt_MASQUERADE is missing and the nftables backend isn't available"
+    printf "    (needs Docker >= 29 and kernel nft masq support). Docker's bridge\n"
+    printf "    network can't start until the kernel provides one of them.\n"
+  fi
+}
+
+# ----------------------------------------------------------------------------
+# Helper: enable + start docker.service, then VERIFY the daemon is actually
+# running. `systemctl enable --now` (and get.docker.com) can return 0 while the
+# daemon dies immediately afterward, so we trust `is-active`, not $?. A dead
+# daemon is a failed install — this exits the script and dumps the daemon log
+# so the real cause (usually a kernel/netfilter or storage-driver issue, not a
+# packaging problem) is visible instead of buried under a green SUCCESS.
+# ----------------------------------------------------------------------------
+enable_and_start_docker() {
+  ensure_docker_kernel_modules
+  ensure_docker_firewall_backend
+  log_step "Enabling and starting the Docker service..."
+  # Clear any restart-limit backoff from a previous failed attempt so this
+  # start is actually tried rather than refused ("start request repeated...").
+  systemctl reset-failed docker.service docker.socket >/dev/null 2>&1
+  systemctl enable docker --now 2>/dev/null
+  if systemctl is-active --quiet docker; then
+    printf "%s\n" "🐳 Docker Service Status: $(style_text "active" bold green)"
+    return 0
+  fi
+
+  printf "%s\n" "🐳 Docker Service Status: $(style_text "failed" bold red)"
+  log_err "Docker installed but the daemon failed to start."
+  printf "    This is almost always an environment/kernel issue (netfilter/iptables\n"
+  printf "    modules, storage driver) rather than a packaging problem —\n"
+  printf "    reinstalling Docker will NOT fix it. Last lines of the daemon log:\n\n"
+  # Clear the restart-limit backoff so the log shows the real error, not a
+  # "start request repeated too quickly" message.
+  systemctl reset-failed docker.service >/dev/null 2>&1
+  journalctl -u docker.service --no-pager -n 25 2>/dev/null \
+    || printf "    (journalctl unavailable; run: systemctl status docker.service)\n"
+  exit 1
+}
+
+# ----------------------------------------------------------------------------
 # Pre-flight
 # ----------------------------------------------------------------------------
 clear          # Clear the screen
@@ -171,6 +334,7 @@ if [ -n "$model" ]; then
   remove_conflicting_packages
   curl -sSL https://get.docker.com | sh
   check_status "🥧  Raspberry Pi Docker installation" $?
+  enable_and_start_docker
 
 elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
@@ -205,9 +369,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   check_status "Docker installation" $?
 
-  printf "%s\n" "Enabling and starting the Docker service..."
-  systemctl enable docker --now
-  printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
+  enable_and_start_docker
 
 elif [ "$ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
@@ -220,6 +382,7 @@ elif [ "$ID" = "debian" ]; then
     remove_conflicting_packages
     curl -sSL https://get.docker.com | sh
     check_status "Docker convenience-script installation" $?
+    enable_and_start_docker
   else
     log_step "Installing Docker for $PRETTY_NAME ($VERSION_CODENAME)..."
     remove_conflicting_packages
@@ -248,8 +411,7 @@ elif [ "$ID" = "debian" ]; then
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Docker installation" $?
 
-    systemctl enable docker --now
-    printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
+    enable_and_start_docker
   fi
 
 else
@@ -271,6 +433,7 @@ else
     remove_conflicting_packages
     curl -sSL https://get.docker.com | sh
     check_status "Docker convenience-script installation" $?
+    enable_and_start_docker
   else
     install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
     check_status "Checking result of package installation" $?
@@ -303,8 +466,7 @@ else
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Checking Result of Docker installation" $?
 
-    systemctl enable docker --now
-    printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
+    enable_and_start_docker
   fi
 fi
 
