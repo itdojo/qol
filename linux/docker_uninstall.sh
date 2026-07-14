@@ -62,6 +62,13 @@ uninstall_docker() {
     docker plugin ls -q  | xargs -r docker plugin rm -f  2>/dev/null
     log_info "Note: this does not remove Docker Swarm services, nodes, or secrets."
 
+    # Stop and disable the services BEFORE purging packages and deleting data.
+    # Tearing /var/lib/docker out from under a live daemon (overlay2 mounts,
+    # busy files) is how you leave the machine in a half-broken state.
+    log_step "Stopping Docker services..."
+    systemctl disable --now docker.socket docker.service containerd.service 2>/dev/null || true
+    systemctl stop docker.socket docker.service containerd.service 2>/dev/null || true
+
     # Only purge packages that are actually installed — passing a name apt has
     # never heard of (e.g. docker-engine on modern releases) aborts the whole
     # apt-get purge command.

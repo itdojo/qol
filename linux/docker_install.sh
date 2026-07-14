@@ -23,6 +23,11 @@
 #   base_functions.sh); replaced the old fstring calls.
 # - Root check now happens before any prompts; 'q' at the uninstall prompt
 #   aborts the installer instead of falling through.
+# - Verify the daemon actually STARTS. `systemctl enable --now` (and
+#   get.docker.com) can return 0 while dockerd dies immediately afterward, so
+#   every install path now calls enable_and_start_docker(), which trusts
+#   `systemctl is-active` (not $?), and on failure dumps the daemon log and
+#   exits non-zero instead of reporting SUCCESS over a dead daemon.
 #
 # This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
 # The base_functions.sh file should be available in the same directory as this script.
@@ -102,6 +107,35 @@ docker_smoke_test() {
 }
 
 # ----------------------------------------------------------------------------
+# Helper: enable + start docker.service, then VERIFY the daemon is actually
+# running. `systemctl enable --now` (and get.docker.com) can return 0 while the
+# daemon dies immediately afterward, so we trust `is-active`, not $?. A dead
+# daemon is a failed install — this exits the script and dumps the daemon log
+# so the real cause (usually a kernel/netfilter or storage-driver issue, not a
+# packaging problem) is visible instead of buried under a green SUCCESS.
+# ----------------------------------------------------------------------------
+enable_and_start_docker() {
+  log_step "Enabling and starting the Docker service..."
+  systemctl enable docker --now 2>/dev/null
+  if systemctl is-active --quiet docker; then
+    printf "%s\n" "🐳 Docker Service Status: $(style_text "active" bold green)"
+    return 0
+  fi
+
+  printf "%s\n" "🐳 Docker Service Status: $(style_text "failed" bold red)"
+  log_err "Docker installed but the daemon failed to start."
+  printf "    This is almost always an environment/kernel issue (netfilter/iptables\n"
+  printf "    modules, storage driver) rather than a packaging problem —\n"
+  printf "    reinstalling Docker will NOT fix it. Last lines of the daemon log:\n\n"
+  # Clear the restart-limit backoff so the log shows the real error, not a
+  # "start request repeated too quickly" message.
+  systemctl reset-failed docker.service >/dev/null 2>&1
+  journalctl -u docker.service --no-pager -n 25 2>/dev/null \
+    || printf "    (journalctl unavailable; run: systemctl status docker.service)\n"
+  exit 1
+}
+
+# ----------------------------------------------------------------------------
 # Pre-flight
 # ----------------------------------------------------------------------------
 clear          # Clear the screen
@@ -171,6 +205,7 @@ if [ -n "$model" ]; then
   remove_conflicting_packages
   curl -sSL https://get.docker.com | sh
   check_status "🥧  Raspberry Pi Docker installation" $?
+  enable_and_start_docker
 
 elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
@@ -205,9 +240,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   check_status "Docker installation" $?
 
-  printf "%s\n" "Enabling and starting the Docker service..."
-  systemctl enable docker --now
-  printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
+  enable_and_start_docker
 
 elif [ "$ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
@@ -220,6 +253,7 @@ elif [ "$ID" = "debian" ]; then
     remove_conflicting_packages
     curl -sSL https://get.docker.com | sh
     check_status "Docker convenience-script installation" $?
+    enable_and_start_docker
   else
     log_step "Installing Docker for $PRETTY_NAME ($VERSION_CODENAME)..."
     remove_conflicting_packages
@@ -248,8 +282,7 @@ elif [ "$ID" = "debian" ]; then
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Docker installation" $?
 
-    systemctl enable docker --now
-    printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
+    enable_and_start_docker
   fi
 
 else
@@ -271,6 +304,7 @@ else
     remove_conflicting_packages
     curl -sSL https://get.docker.com | sh
     check_status "Docker convenience-script installation" $?
+    enable_and_start_docker
   else
     install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
     check_status "Checking result of package installation" $?
@@ -303,8 +337,7 @@ else
     install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
     check_status "Checking Result of Docker installation" $?
 
-    systemctl enable docker --now
-    printf "%s\n" "🐳 Docker Service Status: $(systemctl is-active docker)"
+    enable_and_start_docker
   fi
 fi
 
