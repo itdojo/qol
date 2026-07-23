@@ -12,6 +12,7 @@ How the repo is organized:
 
 | Tool | Intended OS | Description |
 |:--|:--|:--|
+| [gotime](gotime) | macOS, Linux | Colorful arrow-key/number menu of courses (`~/courseware`) and projects (`~/projects`); on selection, spins up a tmux session named `gotime` with three windows — `dojobrain` (`~/vaults/dojobrain`, runs `claude`), the chosen course/project (runs `claude`), and `local` (a shell in `~`). Zero extra dependencies (bash + tmux + tput). `gotime <slug>` skips the menu; `gotime --list` shows what it sees. Wire it up with `alias gotime="$HOME/projects/qol/gotime"`. |
 | [install_zsh.sh](install_zsh.sh) | macOS, Linux | Installs and configures zsh, Oh My Zsh, Powerlevel10k, MesloLGS Nerd Font, and the zsh-autosuggestions, zsh-syntax-highlighting, and zsh-completions plugins. Supports apt, dnf, pacman, apk, zypper, and Homebrew. Idempotent. |
 | [shell-login-settings.sh](shell-login-settings.sh) | macOS, Linux | Personal login-shell helpers, meant to be sourced from `.bashrc`/`.zshrc`. Currently provides `gitssh`, which authenticates to GitHub over SSH and reuses a running ssh-agent when possible. |
 | [tool_checks.sh](tool_checks.sh) | macOS, Linux (Debian) | Sourceable `check_for_tool` function: verifies a CLI tool is installed and installs it if missing (Homebrew on macOS, apt on Debian/Ubuntu). |

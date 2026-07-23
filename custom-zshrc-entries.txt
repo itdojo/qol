@@ -29,6 +29,10 @@ alias td="tmux detach"               # Detach from tmux session
 alias ta="tmux attach"               # Attach to tmux session
 alias tn="tmux new"                  # New tmux session (default name)
 alias tns="tmux new -s"              # New tmux session named <session_name>
+
+# Pick a course/project from a menu, then launch the "gotime" tmux session
+# (dojobrain + selection + local). See the gotime script in this repo.
+alias gotime="$HOME/projects/qol/gotime"
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
@@ -52,6 +56,7 @@ function hint() {
   personal            - Personal
  
 -- TMUX -------------------------------------------------------------------
+  gotime              - Menu -> launch the "gotime" tmux work session
   tn                  - New tmux session (default name)
   tns session_name    - New tmux session named <session_name>
   tksess[ion]         - Kill tmux session

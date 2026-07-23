@@ -1,0 +1,375 @@
+#!/usr/bin/env bash
+# ----------------------------------------------------------------------------
+# gotime
+#
+# Pick a course (~/courseware) or project (~/projects) from a colorful menu,
+# then spin up a tmux session named "gotime" wired for a work session:
+#
+#   window 1  "dojobrain"   ~/vaults/dojobrain     -> starts `claude`
+#   window 2  "<selection>"  the chosen course/proj -> starts `claude`
+#   window 3  "local"        ~                       -> just a shell prompt
+#
+# Navigate the menu with the arrow keys (or j/k), jump by typing an item's
+# number, press Enter to launch, q/Esc to cancel.
+#
+# Usage:
+#   gotime                 # show the menu, then launch
+#   gotime <slug>          # skip the menu, launch straight for <slug> (e.g. gotime ai)
+#   gotime --list          # list the courses/projects it can see, then exit
+#   gotime -h | --help     # this help
+#
+# Portable across machines: only depends on bash, tmux, and tput, and refers
+# to paths (~/courseware, ~/projects, ~/vaults/dojobrain) that are identical on
+# every box. Written to run on both modern bash and macOS's stock bash 3.2.
+#
+# Test / power-user knobs (environment variables):
+#   GOTIME_SESSION=name    # use a different tmux session name (default: gotime)
+#   GOTIME_CMD='claude'    # command started in the two claude windows (default: claude)
+#   GOTIME_NO_ATTACH=1     # build the session but do not attach (used by tests)
+#   NO_COLOR=1             # disable color
+# ----------------------------------------------------------------------------
+
+set -o pipefail
+
+# --- configuration ----------------------------------------------------------
+GOTIME_SESSION="${GOTIME_SESSION:-gotime}"
+GOTIME_CMD="${GOTIME_CMD:-claude}"
+DOJOBRAIN_DIR="$HOME/vaults/dojobrain"
+COURSEWARE_DIR="$HOME/courseware"
+PROJECTS_DIR="$HOME/projects"
+
+# Parallel arrays describing every selectable item (bash 3.2 has no assoc arrays).
+NAMES=()   # slug / display name
+PATHS=()   # absolute path
+KINDS=()   # "course" | "project"
+ICONS=()   # display glyph
+COUNT=0
+
+SELIDX=0        # menu result: index of chosen item, or -1 if cancelled
+TUI_ACTIVE=""   # set while the alternate screen / hidden cursor is in effect
+KEY=""          # last decoded key (set by read_key)
+KEYCH=""        # the literal char for a DIGIT key
+
+# --- colors -----------------------------------------------------------------
+# Truecolor palette lifted from the user's .zshrc fzf theme so gotime feels
+# native. Suppressed when stdout is not a terminal, or NO_COLOR is set.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    C_RESET=$'\033[0m'
+    C_BOLD=$'\033[1m'
+    C_DIM=$'\033[2m'
+    C_FG=$'\033[38;2;203;224;240m'      # #CBE0F0 foreground
+    C_CYAN=$'\033[38;2;44;249;237m'     # #2CF9ED
+    C_BLUE=$'\033[38;2;6;188;228m'      # #06BCE4
+    C_PURPLE=$'\033[38;2;179;136;255m'  # #B388FF
+    C_YELLOW=$'\033[38;2;255;203;107m'
+    SEL_BG=$'\033[48;2;20;54;82m'       # #143652 highlight bar
+    CLR_EOL=$'\033[K'
+else
+    C_RESET="" C_BOLD="" C_DIM="" C_FG="" C_CYAN="" C_BLUE="" C_PURPLE=""
+    C_YELLOW="" SEL_BG="" CLR_EOL=""
+fi
+
+# --- discovery --------------------------------------------------------------
+add_items() {  # add_items <dir> <kind> <icon>
+    local dir="$1" kind="$2" icon="$3" p base
+    [[ -d "$dir" ]] || return 0
+    shopt -s nullglob
+    for p in "$dir"/*/; do
+        p="${p%/}"
+        [[ -d "$p" ]] || continue
+        base="${p##*/}"
+        NAMES+=("$base"); PATHS+=("$p"); KINDS+=("$kind"); ICONS+=("$icon")
+    done
+    shopt -u nullglob
+}
+
+discover() {
+    add_items "$COURSEWARE_DIR" course "🎓"
+    add_items "$PROJECTS_DIR"   project "📦"
+    COUNT="${#NAMES[@]}"
+}
+
+find_slug() {  # echo the index of the item whose slug == $1, else nothing
+    local want="$1" i
+    for (( i = 0; i < COUNT; i++ )); do
+        if [[ "${NAMES[$i]}" == "$want" ]]; then printf '%s' "$i"; return 0; fi
+    done
+    return 1
+}
+
+section_title() { [[ "$1" == "course" ]] && printf 'COURSES' || printf 'PROJECTS'; }
+
+# --- drawing ----------------------------------------------------------------
+term_cols() {
+    local cols
+    cols="$(tput cols 2>/dev/null)" || cols=80
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    printf '%s' "$cols"
+}
+
+hr() {  # a full-width colored rule
+    local ch="${1:-━}" cols line
+    cols="$(term_cols)"
+    printf -v line '%*s' "$cols" ''
+    printf '%s%s%s\n' "$C_BLUE" "${line// /$ch}" "$C_RESET"
+}
+
+banner() {
+    hr
+    printf '   %s⚡ GO TIME ⚡%s   %spick a workspace — launch the session%s\n' \
+        "$C_CYAN$C_BOLD" "$C_RESET" "$C_DIM" "$C_RESET"
+    hr
+}
+
+render_row() {  # render_row <index> <selected-index> <number-width>
+    local i="$1" sel="$2" numw="$3" num icon name
+    num="$(printf "%${numw}d" $(( i + 1 )))"
+    icon="${ICONS[$i]}"
+    name="${NAMES[$i]}"
+    if (( i == sel )); then
+        printf '%s%s%s ❯ %s  %s %s%s%s\n' \
+            "$SEL_BG" "$C_BOLD" "$C_CYAN" "$num" "$icon" "$name" "$CLR_EOL" "$C_RESET"
+    else
+        printf '   %s%s%s  %s %s%s%s\n' \
+            "$C_DIM" "$num" "$C_RESET" "$icon" "$C_FG" "$name" "$C_RESET"
+    fi
+}
+
+footer() {  # footer <selected-index> <number-buffer>
+    local sel="$1" numbuf="$2" tgt="${PATHS[$sel]}"
+    # Shorten $HOME to ~ without relying on ${var/#.../~} — bash tilde-expands
+    # the replacement string, so build it inside double quotes instead.
+    case "$tgt" in
+        "$HOME"/*) tgt="~/${tgt#"$HOME"/}" ;;
+        "$HOME")   tgt="~" ;;
+    esac
+    echo
+    hr
+    printf ' %s↑/↓%s or %sj/k%s move   %s1-9%s jump   %s⏎%s start   %sq%s quit\n' \
+        "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET" \
+        "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET"
+    printf ' %swindows:%s dojobrain · %s%s%s · local     %s%s%s' \
+        "$C_DIM" "$C_RESET" "$C_BOLD$C_CYAN" "${NAMES[$sel]}" "$C_RESET" \
+        "$C_DIM" "$tgt" "$C_RESET"
+    [[ -n "$numbuf" ]] && printf '   %s[%s]%s' "$C_PURPLE" "$numbuf" "$C_RESET"
+    echo
+}
+
+draw() {  # draw <selected-index> <number-buffer>
+    local sel="$1" numbuf="$2" i kind prev="" numw="${#COUNT}"
+    tput clear 2>/dev/null || printf '\033[2J\033[H'
+    banner
+    for (( i = 0; i < COUNT; i++ )); do
+        kind="${KINDS[$i]}"
+        if [[ "$kind" != "$prev" ]]; then
+            printf '\n %s%s%s\n' "$C_PURPLE$C_BOLD" "$(section_title "$kind")" "$C_RESET"
+            prev="$kind"
+        fi
+        render_row "$i" "$sel" "$numw"
+    done
+    footer "$sel" "$numbuf"
+}
+
+# --- input ------------------------------------------------------------------
+# Decode one keypress into a symbolic KEY. Works on bash 3.2+ (no read -N, no
+# fractional -t). Arrow keys arrive as ESC then "[A"/"OA" etc.; a lone Esc is
+# distinguished by the 1-second read timing out.
+read_key() {
+    local k s
+    KEY=""; KEYCH=""
+    IFS= read -rsn1 k || { KEY="QUIT"; return; }
+    if [[ -z "$k" ]]; then KEY="ENTER"; return; fi
+    case "$k" in
+        $'\r'|$'\n')   KEY="ENTER" ;;
+        $'\x1b')
+            IFS= read -rsn2 -t 1 s
+            case "$s" in
+                '[A'|'OA') KEY="UP" ;;
+                '[B'|'OB') KEY="DOWN" ;;
+                '[H'|'OH') KEY="HOME" ;;
+                '[F'|'OF') KEY="END" ;;
+                '')        KEY="QUIT" ;;   # bare Esc
+                *)         KEY="OTHER" ;;
+            esac ;;
+        $'\x7f'|$'\x08') KEY="BACKSPACE" ;;
+        [0-9])           KEY="DIGIT"; KEYCH="$k" ;;
+        k|K)             KEY="UP" ;;
+        j|J)             KEY="DOWN" ;;
+        g)               KEY="HOME" ;;
+        G)               KEY="END" ;;
+        q|Q)             KEY="QUIT" ;;
+        *)               KEY="OTHER" ;;
+    esac
+}
+
+menu() {
+    SELIDX=0
+    local numbuf="" n cand
+    tput smcup 2>/dev/null; tput civis 2>/dev/null; TUI_ACTIVE=1
+    draw "$SELIDX" "$numbuf"
+    while true; do
+        read_key
+        case "$KEY" in
+            ENTER) break ;;
+            QUIT)  SELIDX=-1; break ;;
+            UP)    numbuf=""; SELIDX=$(( (SELIDX - 1 + COUNT) % COUNT )) ;;
+            DOWN)  numbuf=""; SELIDX=$(( (SELIDX + 1) % COUNT )) ;;
+            HOME)  numbuf=""; SELIDX=0 ;;
+            END)   numbuf=""; SELIDX=$(( COUNT - 1 )) ;;
+            BACKSPACE)
+                numbuf="${numbuf%?}"
+                if [[ -n "$numbuf" ]]; then
+                    n=$(( 10#$numbuf ))
+                    (( n >= 1 && n <= COUNT )) && SELIDX=$(( n - 1 ))
+                fi ;;
+            DIGIT)
+                cand="${numbuf}${KEYCH}"
+                n=$(( 10#$cand ))
+                if (( n >= 1 && n <= COUNT )); then
+                    numbuf="$cand"; SELIDX=$(( n - 1 ))
+                elif (( 10#$KEYCH >= 1 && 10#$KEYCH <= COUNT )); then
+                    numbuf="$KEYCH"; SELIDX=$(( 10#$KEYCH - 1 ))
+                else
+                    numbuf=""
+                fi ;;
+            *) : ;;
+        esac
+        draw "$SELIDX" "$numbuf"
+    done
+    tput cnorm 2>/dev/null; tput rmcup 2>/dev/null; TUI_ACTIVE=""
+}
+
+# --- tmux launch ------------------------------------------------------------
+attach_session() {
+    local s="$1"
+    if [[ -n "${GOTIME_NO_ATTACH:-}" ]]; then
+        printf '%s✅ session "%s" ready%s (not attaching).\n' "$C_CYAN" "$s" "$C_RESET"
+        return 0
+    fi
+    if [[ -n "${TMUX:-}" ]]; then
+        tmux switch-client -t "=$s"
+    else
+        tmux attach-session -t "=$s"
+    fi
+}
+
+launch() {  # launch <slug> <target-dir>
+    local slug="$1" target="$2" s="$GOTIME_SESSION"
+    local dj="$DOJOBRAIN_DIR" w1 w2 w3 w ans
+
+    [[ -d "$dj" ]] || { printf '%s⚠ %s not found; window 1 will open in ~ instead.%s\n' \
+        "$C_YELLOW" "$dj" "$C_RESET"; dj="$HOME"; }
+
+    command -v "${GOTIME_CMD%% *}" >/dev/null 2>&1 || printf '%s⚠ `%s` is not on PATH; those windows will show a "command not found".%s\n' \
+        "$C_YELLOW" "${GOTIME_CMD%% *}" "$C_RESET"
+
+    if tmux has-session -t "=$s" 2>/dev/null; then
+        if [[ -n "${GOTIME_NO_ATTACH:-}" ]]; then
+            tmux kill-session -t "=$s"
+        else
+            printf '%s⚠ A tmux session named "%s" already exists.%s\n' "$C_YELLOW" "$s" "$C_RESET"
+            printf '  [a] attach to it    [r] recreate it fresh    [c] cancel   ? '
+            IFS= read -r ans
+            case "$ans" in
+                a|A) attach_session "$s"; return $? ;;
+                r|R) tmux kill-session -t "=$s" ;;
+                *)   printf 'gotime: cancelled.\n'; return 0 ;;
+            esac
+        fi
+    fi
+
+    # Build the three windows, capturing each window id so later commands are
+    # immune to base-index settings and name collisions.
+    w1="$(tmux new-session -d -s "$s" -n dojobrain -c "$dj"     -P -F '#{window_id}')" || {
+        printf '%sgotime: failed to create tmux session.%s\n' "$C_YELLOW" "$C_RESET" >&2; return 1; }
+    w2="$(tmux new-window  -t "=$s:" -n "$slug"    -c "$target" -P -F '#{window_id}')"
+    w3="$(tmux new-window  -t "=$s:" -n local      -c "$HOME"   -P -F '#{window_id}')"
+
+    # Keep the window names we chose (claude/node would otherwise rename them).
+    for w in "$w1" "$w2" "$w3"; do
+        tmux set-window-option -t "$w" automatic-rename off 2>/dev/null
+        tmux set-window-option -t "$w" allow-rename off 2>/dev/null
+    done
+
+    tmux send-keys -t "$w1" "$GOTIME_CMD" Enter
+    tmux send-keys -t "$w2" "$GOTIME_CMD" Enter
+    tmux select-window -t "$w2"   # land on the workspace the user just chose
+
+    attach_session "$s"
+}
+
+# --- top level --------------------------------------------------------------
+usage() {
+    cat <<'EOF'
+gotime — pick a course/project and launch a tmux work session.
+
+  gotime            show the menu, then launch
+  gotime <slug>     skip the menu and launch straight for <slug>
+  gotime --list     list the courses/projects gotime can see
+  gotime -h|--help  show this help
+
+The session "gotime" gets three windows: dojobrain (claude), your selection
+(claude), and local (a plain shell in ~).
+EOF
+}
+
+list_items() {
+    local i
+    printf 'Courses and projects gotime can see:\n'
+    for (( i = 0; i < COUNT; i++ )); do
+        printf '  %2d  %-8s %s\n' "$(( i + 1 ))" "${KINDS[$i]}" "${NAMES[$i]}"
+    done
+}
+
+cleanup() {
+    if [[ -n "$TUI_ACTIVE" ]]; then
+        tput cnorm 2>/dev/null; tput rmcup 2>/dev/null; TUI_ACTIVE=""
+    fi
+}
+trap cleanup EXIT INT TERM
+
+main() {
+    local direct="" idx slug target
+    case "${1:-}" in
+        -h|--help) usage; exit 0 ;;
+        --list)    discover; list_items; exit 0 ;;
+        -*)        printf 'gotime: unknown option "%s"\n\n' "$1" >&2; usage >&2; exit 2 ;;
+        '')        : ;;
+        *)         direct="$1" ;;
+    esac
+
+    if ! command -v tmux >/dev/null 2>&1; then
+        printf 'gotime: tmux is not installed.\n' >&2; exit 1
+    fi
+
+    discover
+    (( COUNT > 0 )) || {
+        printf 'gotime: found no courses under %s or projects under %s.\n' \
+            "$COURSEWARE_DIR" "$PROJECTS_DIR" >&2
+        exit 1
+    }
+
+    if [[ -n "$direct" ]]; then
+        if ! idx="$(find_slug "$direct")"; then
+            printf 'gotime: no course or project named "%s".\n\n' "$direct" >&2
+            list_items >&2
+            exit 1
+        fi
+    else
+        if [[ ! -t 0 || ! -t 1 ]]; then
+            printf 'gotime: not an interactive terminal; pass a slug instead (e.g. gotime ai).\n' >&2
+            exit 1
+        fi
+        menu
+        idx="$SELIDX"
+        if (( idx < 0 )); then printf 'gotime: cancelled.\n'; exit 0; fi
+    fi
+
+    slug="${NAMES[$idx]}"
+    target="${PATHS[$idx]}"
+    [[ -d "$target" ]] || { printf 'gotime: target directory missing: %s\n' "$target" >&2; exit 1; }
+
+    launch "$slug" "$target"
+}
+
+main "$@"
