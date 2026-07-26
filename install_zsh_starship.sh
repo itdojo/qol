@@ -426,11 +426,17 @@ write_starship_config() {
 add_newline = true
 
 format = """
-[╭─](238)$os$directory$git_branch$git_status$fill$status$cmd_duration$jobs$python$nodejs$golang$rust$java$ruby$aws$gcloud$azure$kubernetes$terraform$time
+[╭─](238)$os$directory$git_branch$git_status$fill$status$cmd_duration$jobs$python$nodejs$golang$rust$java$ruby$aws$gcloud$azure$kubernetes$terraform$time[─╮](238)
 [╰─](238)$character"""
 
+# Closes the frame at the right end of the input line.
+right_format = "[─╯](238)"
+
+# A blank gap between the left and right halves of the first line, matching
+# POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR=' '. Set symbol to "─" or "·"
+# if you would rather see the alignment.
 [fill]
-symbol = "─"
+symbol = " "
 style = "238"
 
 [os]
@@ -635,9 +641,10 @@ zstyle ':completion:*' list-colors "\${(s.:.)LS_COLORS}"
 zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
 
 # fzf keybindings (ctrl-R history, ctrl-T files). Oh My Zsh's fzf plugin used
-# to wire these up. 'fzf --zsh' needs fzf 0.48+; older versions ship the same
-# bindings as files next to the binary.
-if command -v fzf &>/dev/null; then
+# to wire these up. Skipped entirely when something earlier in this file already
+# did it — double-sourcing works but is wasted startup time. 'fzf --zsh' needs
+# fzf 0.48+; older versions ship the same bindings as files next to the binary.
+if [[ -o interactive ]] && command -v fzf &>/dev/null && ! (( \${+widgets[fzf-history-widget]} )); then
   if fzf --zsh >/dev/null 2>&1; then
     source <(fzf --zsh)
   else
