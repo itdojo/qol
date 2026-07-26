@@ -253,6 +253,15 @@ backup_zshrc() {
     printf '%s\n' "$backup"
 }
 
+# Overwrite dst with the contents of src, keeping dst's mode, owner and inode.
+# `mv tmp dst` would be simpler but carries the temp file's permissions across —
+# mktemp creates 0600, so that silently tightens a normal 0644 .zshrc.
+replace_file_contents() {
+    local src="$1" dst="$2"
+    cat "$src" > "$dst"
+    rm -f "$src"
+}
+
 # Remove every Oh My Zsh / Powerlevel10k line from the given file.
 #
 # Comments are handled as *runs*, not as individual lines. The Oh My Zsh .zshrc
@@ -333,7 +342,7 @@ strip_zshrc() {
         { if (started && blanks) print ""; started = 1; blanks = 0; print }
     ' "$tmp" > "$tmp2"
 
-    mv "$tmp2" "$file"
+    replace_file_contents "$tmp2" "$file"
     rm -f "$tmp"
 }
 

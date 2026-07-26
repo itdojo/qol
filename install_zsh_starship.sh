@@ -352,6 +352,15 @@ backup_file() {
     log_info "Backed up $f → $backup"
 }
 
+# Overwrite dst with the contents of src, keeping dst's mode, owner and inode.
+# `mv tmp dst` would be simpler but carries the temp file's permissions across —
+# mktemp creates 0600, so that silently tightens a normal 0644 .zshrc.
+replace_file_contents() {
+    local src="$1" dst="$2"
+    cat "$src" > "$dst"
+    rm -f "$src"
+}
+
 # ---------------------------------------------------------------------------
 # Git aliases
 # ---------------------------------------------------------------------------
@@ -588,7 +597,7 @@ remove_managed_block() {
         !skip { print }
         index($0, e) { skip = 0 }
     ' "$file" > "$tmp"
-    mv "$tmp" "$file"
+    replace_file_contents "$tmp" "$file"
 }
 
 update_zshrc() {
