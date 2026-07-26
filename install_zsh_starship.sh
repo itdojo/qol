@@ -592,7 +592,7 @@ vimcmd_visual_symbol = '[❮](bold fg:violet)'
 [cmd_duration]
 show_milliseconds = true
 format = " in $duration "
-style = "bg:lavender"
+style = "fg:crust bg:jade"
 disabled = false
 show_notifications = true
 min_time_to_notify = 45000
