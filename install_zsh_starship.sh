@@ -438,7 +438,7 @@ write_starship_config() {
 format = """
 [](violet_deep)\
 $os\
-$username\
+$hostname\
 [](fg:violet_deep bg:violet)\
 $directory\
 [](fg:violet bg:moss_deep)\
@@ -457,9 +457,7 @@ $haskell\
 $python\
 [](fg:moss bg:jade)\
 $conda\
-[](fg:jade bg:orchid)\
-$time\
-[ ](fg:orchid)\
+[](fg:jade)\
 $line_break\
 $character"""
 
@@ -491,11 +489,11 @@ Debian = "󰣚"
 Redhat = "󱄛"
 RedHatEnterprise = "󱄛"
 
-[username]
-show_always = true
-style_user = "bg:violet_deep fg:text"
-style_root = "bg:violet_deep fg:text"
-format = '[ $user]($style)'
+[hostname]
+ssh_only = false
+style = "bg:violet_deep fg:text"
+format = '[ $hostname]($style)'
+trim_at = "."
 
 [directory]
 style = "bg:violet fg:text"
@@ -579,12 +577,6 @@ symbol = "  "
 style = "fg:crust bg:jade"
 format = '[$symbol$environment ]($style)'
 ignore_base = false
-
-[time]
-disabled = false
-time_format = "%R"
-style = "bg:lavender"
-format = '[[  $time ](fg:crust bg:orchid)]($style)'
 
 [line_break]
 disabled = false
