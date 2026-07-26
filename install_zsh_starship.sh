@@ -15,7 +15,7 @@
 #   * a managed ~/.zshrc block with history defaults, completion styling, fzf
 #     keybindings, and the plugin source lines
 #   * ~/.config/zsh/git-aliases.zsh — the commonly used Oh My Zsh git aliases
-#   * ~/.config/starship.toml — a port of the Powerlevel10k "lean" prompt
+#   * ~/.config/starship.toml — the "grove" powerline pill prompt
 #
 # Targets:
 #   - macOS                       (Homebrew)
@@ -419,165 +419,315 @@ ALIASES
 # ---------------------------------------------------------------------------
 # Starship prompt config
 # ---------------------------------------------------------------------------
-# A port of the Powerlevel10k "lean with frame" prompt: two lines, a grey frame,
-# transparent segment backgrounds. The colour numbers are the 256-colour indices
-# the stock .p10k.zsh used, so the result reads as the same prompt.
+# The "grove" pill prompt: powerline segments on a violet → moss → jade → orchid
+# ramp, ending in a clock, with the prompt character on its own line below. Needs
+# a Nerd Font for the separator and language glyphs.
 write_starship_config() {
     log_step "Writing $STARSHIP_CONFIG..."
     mkdir -p "$(dirname "$STARSHIP_CONFIG")"
     backup_file "$STARSHIP_CONFIG"
     cat > "$STARSHIP_CONFIG" <<'TOML'
-# Starship prompt — ported from the Powerlevel10k "lean" style.
+# Starship prompt — the "grove" pill style: powerline segments on a violet →
+# moss → jade → orchid ramp, prompt character on its own line below.
 # Written by install_zsh_starship.sh. Rerunning that script overwrites this
 # file (after backing it up), so keep local tweaks somewhere you'll remember.
 # Reference: https://starship.rs/config/
 
-add_newline = true
+"$schema" = 'https://starship.rs/config-schema.json'
 
 format = """
-[╭─](238)$os$directory$git_branch$git_status$fill$status$cmd_duration$jobs$python$nodejs$golang$rust$java$ruby$aws$gcloud$azure$kubernetes$terraform$time[─╮](238)
-[╰─](238)$character"""
+[](violet_deep)\
+$os\
+$username\
+[](fg:violet_deep bg:violet)\
+$directory\
+[](fg:violet bg:moss_deep)\
+$git_branch\
+$git_status\
+[](fg:moss_deep bg:moss)\
+$c\
+$rust\
+$golang\
+$nodejs\
+$bun\
+$php\
+$java\
+$kotlin\
+$haskell\
+$python\
+[](fg:moss bg:jade)\
+$conda\
+[](fg:jade bg:orchid)\
+$time\
+[ ](fg:orchid)\
+$line_break\
+$character"""
 
-# Closes the frame at the right end of the input line.
-right_format = "[─╯](238)"
-
-# A blank gap between the left and right halves of the first line, matching
-# POWERLEVEL9K_MULTILINE_FIRST_PROMPT_GAP_CHAR=' '. Set symbol to "─" or "·"
-# if you would rather see the alignment.
-[fill]
-symbol = " "
-style = "238"
+palette = 'grove'
 
 [os]
 disabled = false
-format = "[$symbol]($style) "
-style = "bold white"
+style = "bg:violet_deep fg:text"
 
 [os.symbols]
-Macos = ""
-Ubuntu = ""
-Debian = ""
-Raspbian = ""
-Linux = ""
-Arch = ""
-Fedora = ""
-Alpine = ""
-Redhat = ""
-SUSE = ""
+Windows = ""
+Ubuntu = "󰕈"
+SUSE = ""
+Raspbian = "󰐿"
+Mint = "󰣭"
+Macos = "󰀵"
+Manjaro = ""
+Linux = "󰌽"
+Gentoo = "󰣨"
+Fedora = "󰣛"
+Alpine = ""
+Amazon = ""
+Android = ""
+AOSC = ""
+Arch = "󰣇"
+Artix = "󰣇"
+CentOS = ""
+Debian = "󰣚"
+Redhat = "󱄛"
+RedHatEnterprise = "󱄛"
+
+[username]
+show_always = true
+style_user = "bg:violet_deep fg:text"
+style_root = "bg:violet_deep fg:text"
+format = '[ $user]($style)'
 
 [directory]
-style = "31"
+style = "bg:violet fg:text"
+format = "[ $path ]($style)"
 truncation_length = 3
-truncate_to_repo = true
 truncation_symbol = "…/"
-read_only = " "
-format = "[$path]($style)[$read_only]($read_only_style) "
+
+[directory.substitutions]
+"Documents" = "󰈙 "
+"Downloads" = " "
+"Music" = "󰝚 "
+"Pictures" = " "
+"Developer" = "󰲋 "
 
 [git_branch]
-symbol = " "
-style = "76"
-format = "[$symbol$branch]($style) "
+symbol = ""
+style = "bg:moss_deep"
+format = '[[ $symbol $branch ](fg:text bg:moss_deep)]($style)'
 
 [git_status]
-style = "178"
-format = "([$all_status$ahead_behind]($style)) "
-conflicted = "~${count} "
-ahead = "⇡${count} "
-behind = "⇣${count} "
-diverged = "⇕⇡${ahead_count}⇣${behind_count} "
-untracked = "?${count} "
-stashed = "*${count} "
-modified = "!${count} "
-staged = "+${count} "
-renamed = "»${count} "
-deleted = "✘${count} "
+style = "bg:moss_deep"
+format = '[[($all_status$ahead_behind )](fg:text bg:moss_deep)]($style)'
 
-[character]
-success_symbol = "[❯](bold 76)"
-error_symbol = "[❯](bold 196)"
-vimcmd_symbol = "[❮](bold 76)"
+[nodejs]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
 
-[status]
-disabled = false
-style = "160"
-symbol = "✘ "
-format = "[$symbol$status]($style) "
-map_symbol = false
-pipestatus = true
+[bun]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
 
-[cmd_duration]
-min_time = 3000
-style = "101"
-format = "[$duration]($style) "
+[c]
+symbol = " "
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
 
-[jobs]
-style = "70"
-symbol = "⇶ "
-number_threshold = 1
-format = "[$symbol$number]($style) "
+[rust]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
+
+[golang]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
+
+[php]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
+
+[java]
+symbol = " "
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
+
+[kotlin]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
+
+[haskell]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version) ](fg:crust bg:moss)]($style)'
+
+[python]
+symbol = ""
+style = "bg:moss"
+format = '[[ $symbol( $version)(\(#$virtualenv\)) ](fg:crust bg:moss)]($style)'
+
+[docker_context]
+symbol = ""
+style = "bg:jade"
+format = '[[ $symbol( $context) ](fg:crust bg:jade)]($style)'
+
+[conda]
+symbol = "  "
+style = "fg:crust bg:jade"
+format = '[$symbol$environment ]($style)'
+ignore_base = false
 
 [time]
 disabled = false
-style = "66"
-time_format = "%H:%M:%S"
-format = "[$time]($style) "
+time_format = "%R"
+style = "bg:lavender"
+format = '[[  $time ](fg:crust bg:orchid)]($style)'
 
-[python]
-style = "37"
-symbol = " "
-format = "[$symbol$virtualenv]($style) "
-
-[nodejs]
-style = "70"
-symbol = " "
-format = "[$symbol$version]($style) "
-
-[golang]
-style = "37"
-symbol = " "
-format = "[$symbol$version]($style) "
-
-[rust]
-style = "178"
-symbol = " "
-format = "[$symbol$version]($style) "
-
-[java]
-style = "32"
-symbol = " "
-format = "[$symbol$version]($style) "
-
-[ruby]
-style = "168"
-symbol = " "
-format = "[$symbol$version]($style) "
-
-[aws]
-style = "208"
-symbol = " "
-format = '[$symbol$profile(\($region\))]($style) '
-
-[gcloud]
-style = "32"
-symbol = " "
-format = '[$symbol$account(@$domain)(\($project\))]($style) '
-
-[azure]
+[line_break]
 disabled = false
-style = "32"
-symbol = " "
-format = '[$symbol$subscription]($style) '
 
-[kubernetes]
+[character]
 disabled = false
-style = "134"
-symbol = "☸ "
-format = '[$symbol$context(\($namespace\))]($style) '
+success_symbol = '[❯](bold fg:jade)'
+error_symbol = '[❯](bold fg:danger)'
+vimcmd_symbol = '[❮](bold fg:jade)'
+vimcmd_replace_one_symbol = '[❮](bold fg:orchid)'
+vimcmd_replace_symbol = '[❮](bold fg:orchid)'
+vimcmd_visual_symbol = '[❮](bold fg:violet)'
 
-[terraform]
-style = "38"
-symbol = "💠 "
-format = "[$symbol$workspace]($style) "
+[cmd_duration]
+show_milliseconds = true
+format = " in $duration "
+style = "bg:lavender"
+disabled = false
+show_notifications = true
+min_time_to_notify = 45000
+
+[palettes.grove]
+violet_deep = "#2e2447"
+violet      = "#4c3d78"
+orchid      = "#9b83c9"
+moss_deep   = "#1f4634"
+moss        = "#3f8f5c"
+jade        = "#6fc98d"
+text        = "#e6e1f2"
+crust       = "#101018"
+danger      = "#a8334a"
+
+[palettes.catppuccin_mocha]
+rosewater = "#f5e0dc"
+flamingo = "#f2cdcd"
+pink = "#f5c2e7"
+mauve = "#cba6f7"
+red = "#f38ba8"
+maroon = "#eba0ac"
+peach = "#fab387"
+yellow = "#f9e2af"
+green = "#a6e3a1"
+teal = "#94e2d5"
+sky = "#89dceb"
+sapphire = "#74c7ec"
+blue = "#89b4fa"
+lavender = "#b4befe"
+text = "#cdd6f4"
+subtext1 = "#bac2de"
+subtext0 = "#a6adc8"
+overlay2 = "#9399b2"
+overlay1 = "#7f849c"
+overlay0 = "#6c7086"
+surface2 = "#585b70"
+surface1 = "#45475a"
+surface0 = "#313244"
+base = "#1e1e2e"
+mantle = "#181825"
+crust = "#11111b"
+
+[palettes.catppuccin_frappe]
+rosewater = "#f2d5cf"
+flamingo = "#eebebe"
+pink = "#f4b8e4"
+mauve = "#ca9ee6"
+red = "#e78284"
+maroon = "#ea999c"
+peach = "#ef9f76"
+yellow = "#e5c890"
+green = "#a6d189"
+teal = "#81c8be"
+sky = "#99d1db"
+sapphire = "#85c1dc"
+blue = "#8caaee"
+lavender = "#babbf1"
+text = "#c6d0f5"
+subtext1 = "#b5bfe2"
+subtext0 = "#a5adce"
+overlay2 = "#949cbb"
+overlay1 = "#838ba7"
+overlay0 = "#737994"
+surface2 = "#626880"
+surface1 = "#51576d"
+surface0 = "#414559"
+base = "#303446"
+mantle = "#292c3c"
+crust = "#232634"
+
+[palettes.catppuccin_latte]
+rosewater = "#dc8a78"
+flamingo = "#dd7878"
+pink = "#ea76cb"
+mauve = "#8839ef"
+red = "#d20f39"
+maroon = "#e64553"
+peach = "#fe640b"
+yellow = "#df8e1d"
+green = "#40a02b"
+teal = "#179299"
+sky = "#04a5e5"
+sapphire = "#209fb5"
+blue = "#1e66f5"
+lavender = "#7287fd"
+text = "#4c4f69"
+subtext1 = "#5c5f77"
+subtext0 = "#6c6f85"
+overlay2 = "#7c7f93"
+overlay1 = "#8c8fa1"
+overlay0 = "#9ca0b0"
+surface2 = "#acb0be"
+surface1 = "#bcc0cc"
+surface0 = "#ccd0da"
+base = "#eff1f5"
+mantle = "#e6e9ef"
+crust = "#dce0e8"
+
+[palettes.catppuccin_macchiato]
+rosewater = "#f4dbd6"
+flamingo = "#f0c6c6"
+pink = "#f5bde6"
+mauve = "#c6a0f6"
+red = "#ed8796"
+maroon = "#ee99a0"
+peach = "#f5a97f"
+yellow = "#eed49f"
+green = "#a6da95"
+teal = "#8bd5ca"
+sky = "#91d7e3"
+sapphire = "#7dc4e4"
+blue = "#8aadf4"
+lavender = "#b7bdf8"
+text = "#cad3f5"
+subtext1 = "#b8c0e0"
+subtext0 = "#a5adcb"
+overlay2 = "#939ab7"
+overlay1 = "#8087a2"
+overlay0 = "#6e738d"
+surface2 = "#5b6078"
+surface1 = "#494d64"
+surface0 = "#363a4f"
+base = "#24273a"
+mantle = "#1e2030"
+crust = "#181926"
 TOML
     log_ok "$STARSHIP_CONFIG written."
 }
