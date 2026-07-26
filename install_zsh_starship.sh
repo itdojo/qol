@@ -455,9 +455,8 @@ $java\
 $kotlin\
 $haskell\
 $python\
-[](fg:moss bg:jade)\
 $conda\
-[](fg:jade)\
+[](fg:moss)\
 $line_break\
 $character"""
 
@@ -574,7 +573,7 @@ format = '[[ $symbol( $context) ](fg:crust bg:jade)]($style)'
 
 [conda]
 symbol = "  "
-style = "fg:crust bg:jade"
+style = "fg:crust bg:moss"
 format = '[$symbol$environment ]($style)'
 ignore_base = false
 
