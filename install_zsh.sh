@@ -304,6 +304,15 @@ ensure_line_in_file() {
     grep -qxF "$line" "$file" || printf '%s\n' "$line" >> "$file"
 }
 
+# Overwrite dst with the contents of src, keeping dst's mode, owner and inode.
+# `mv tmp dst` would be simpler but carries the temp file's permissions across —
+# mktemp creates 0600, so that silently tightens a normal 0644 .zshrc.
+replace_file_contents() {
+    local src="$1" dst="$2"
+    cat "$src" > "$dst"
+    rm -f "$src"
+}
+
 # Replace `plugins=( ... )` block (single- or multi-line) with one canonical line.
 replace_plugins_block() {
     local file="$1" new_line="$2" tmp
@@ -324,7 +333,7 @@ replace_plugins_block() {
             if (!replaced) { print new }
         }
     ' "$file" > "$tmp"
-    mv "$tmp" "$file"
+    replace_file_contents "$tmp" "$file"
 }
 
 cleanup_legacy_zshrc() {
@@ -342,7 +351,7 @@ cleanup_legacy_zshrc() {
         /^[[:space:]]*set[[:space:]]+-o[[:space:]]+AUTO_CD[[:space:]]*$/ { next }
         { print }
     ' "$ZSHRC" > "$tmp"
-    mv "$tmp" "$ZSHRC"
+    replace_file_contents "$tmp" "$ZSHRC"
 }
 
 update_zshrc() {
@@ -361,7 +370,7 @@ update_zshrc() {
         # Portable in-place edit: sed to a temp file then mv (works on BSD + GNU sed).
         local tmp; tmp="$(mktemp)"
         sed 's|^ZSH_THEME=.*|ZSH_THEME="powerlevel10k/powerlevel10k"|' "$ZSHRC" > "$tmp"
-        mv "$tmp" "$ZSHRC"
+        replace_file_contents "$tmp" "$ZSHRC"
     else
         ensure_line_in_file 'ZSH_THEME="powerlevel10k/powerlevel10k"' "$ZSHRC"
     fi
@@ -381,7 +390,7 @@ update_zshrc() {
                 /^source \$ZSH\/oh-my-zsh\.sh/ && !done { print line; done = 1 }
                 { print }
             ' "$ZSHRC" > "$tmp"
-            mv "$tmp" "$ZSHRC"
+            replace_file_contents "$tmp" "$ZSHRC"
         else
             printf '%s\n' "$fpath_line" >> "$ZSHRC"
         fi
