@@ -293,7 +293,7 @@ launch() {  # launch <slug> <target-dir>
 
     tmux send-keys -t "$w1" "$GOTIME_CMD" Enter
     tmux send-keys -t "$w2" "$GOTIME_CMD" Enter
-    tmux select-window -t "$w2"   # land on the workspace the user just chose
+    tmux select-window -t "$w1"   # land on dojobrain by default
 
     attach_session "$s"
 }
