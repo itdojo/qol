@@ -454,13 +454,26 @@ set indicator" "gated: indicator written"
     assert_contains "$out" "
 set stateflags" "gated: stateflags written"
 
+    # Every other line in this student-facing file explains itself. These two
+    # were the only directives with no trailing comment; the explanation is
+    # aligned into the same column the hand-written ones use.
+    assert_eq "1" "$(printf '%s\n' "$out" | grep -cE '^set indicator +# .')" \
+        "gated: indicator carries a trailing explanatory comment"
+    assert_eq "1" "$(printf '%s\n' "$out" | grep -cE '^set stateflags +# .')" \
+        "gated: stateflags carries a trailing explanatory comment"
+
     # Excluded by design — these must never appear.
     assert_not_contains "$out" "set mouse"   "excluded: mouse"
     assert_not_contains "$out" "set minibar" "excluded: minibar"
     assert_not_contains "$out" "set zero"    "excluded: zero"
     assert_not_contains "$out" "set backup"  "excluded: backup"
     assert_not_contains "$out" "titlecolor"  "excluded: interface colours"
-    assert_not_contains "$out" "bind ^Q"     "excluded: ^Q collides with XOFF"
+    # ^Q is left alone, not rebound: since nano 2.9.0 it starts a backward
+    # search, and this config's floor is 4.0. (The earlier rationale here —
+    # that ^Q is XOFF — was wrong: nano disables flow control unless
+    # `set preserve` is used, which is why that directive exists at all.)
+    assert_not_contains "$out" "bind ^Q" \
+        "excluded: ^Q is left as nano's own backward search, not rebound"
 
     # Include order: community pack must appear before the shipped pack.
     local community_line shipped_line

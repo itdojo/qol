@@ -358,11 +358,21 @@ with nano will still be used."
 # when it does not, write it as a comment naming the version that would enable
 # it, so someone who later upgrades can see what they gained.
 #
-#   gated_directive <long-option> <rc-line> <version-that-added-it>
+# NOTE is an optional trailing explanation, aligned into the same comment
+# column the hand-written directives above use. Without it, the two gated
+# directives were the only lines in a student-facing config file with no
+# explanation of what they do. It is only appended to the live form — the
+# commented form already carries its own explanation.
+#
+#   gated_directive <long-option> <rc-line> <version-that-added-it> [note]
 gated_directive() {
-    local opt="$1" line="$2" since="$3"
+    local opt="$1" line="$2" since="$3" note="${4:-}"
     if nano_supports "$opt"; then
-        printf '%s\n' "$line"
+        if [[ -n "$note" ]]; then
+            printf '%-23s # %s\n' "$line" "$note"
+        else
+            printf '%s\n' "$line"
+        fi
     else
         printf '# %s   # unavailable — needs nano %s (or a non-tiny build)\n' \
             "$line" "$since"
@@ -400,8 +410,10 @@ set constantshow        # always show the cursor position on the status bar
 set guidestripe 80      # faint vertical rule at column 80
 BODY
 
-    gated_directive indicator "set indicator" "5.0"
-    gated_directive stateflags "set stateflags" "5.3"
+    gated_directive indicator "set indicator" "5.0" \
+        "a scrollbar-like marker showing where you are in the file"
+    gated_directive stateflags "set stateflags" "5.3" \
+        "show M (modified) and I (autoindent) on the title bar"
 
     cat <<'BODY'
 
@@ -411,12 +423,20 @@ set historylog          # remember search and replace history between sessions
 set multibuffer         # ^R reads a file into a new buffer instead of inline
 
 # --- keys ------------------------------------------------------------------
-# ^S to save, because everyone's fingers already do this. nano's own ^O
-# ("WriteOut") stays bound as well.
+# ^S already saves. GNU nano has bound it to savefile by default since 2.9.0
+# (NEWS, 2017-11-18), and this config's floor is 4.0, so on every supported
+# build the line below RESTATES the default rather than adding it. It is kept
+# deliberately: it is explicit about a key students are told to use, it costs
+# nothing, and it still does the right thing on a terminal that has been
+# configured to hand ^S to nano differently, or on some future nano that
+# reassigns it. nano's own ^O ("WriteOut") stays bound as well.
 #
-# ^Q is deliberately NOT bound to exit: it is XOFF on many terminals, and a
-# student who hits it on a serial console gets what looks like a frozen
-# machine. ^X remains the way out, and it is on the help bar at all times.
+# ^Q is deliberately left alone rather than rebound to exit. Since 2.9.0 it
+# starts a BACKWARD SEARCH, which is useful and which a student can cancel
+# with ^C — rebinding it would take that away. It is not XOFF here either:
+# nano disables terminal flow control unless `set preserve` is used, which is
+# exactly why that directive exists. ^X remains the way out and is on the help
+# bar at all times.
 bind ^S savefile main
 
 # Stock nano leaves ^Z doing nothing at all — not undo, not suspend, just a

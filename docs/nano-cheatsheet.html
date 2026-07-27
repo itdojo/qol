@@ -55,6 +55,10 @@
      where --violet itself is lightened to serve as ink. */
   --violet-solid: var(--violet);
 
+  /* QOL badge text. A token, not a hardcoded hex, so the @media print reset
+     below can pin it back to its light value — see the badge rule. */
+  --badge-qol-fg: #1E7A37;
+
   /* Terminal code-block surface (stays dark in both themes). */
   --terminal-bg:  var(--gray-900);
   --terminal-fg:  var(--lavender);
@@ -124,6 +128,8 @@
   --warning:      #E0B45A;
   --danger:       #E06B82;
   --info:         #7AA0D8;
+
+  --badge-qol-fg: #7BE098;
 
   --terminal-bg:  #08060F;  /* near-black terminal panel, distinct from page */
   --terminal-fg:  #E4DEF5;  /* light text, not the flipped (dark) lavender */
@@ -235,24 +241,10 @@ main {
   border: 1px solid var(--gray-300);
 }
 
-.hero {
-  margin-bottom: var(--sp-6);
-}
-.hero .v {
-  font-family: var(--font-mono);
-  font-size: var(--fs-caption);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--jade);
-  font-weight: 700;
-  display: block;
-  margin-bottom: var(--sp-2);
-}
-.hero .hero-note {
-  font-size: var(--fs-small);
-  color: var(--gray-500);
-  margin: var(--sp-3) 0 0 0;
-}
+/* The hero card is gone: its two rows (^X and ^S) were duplicated verbatim
+   in "Get out", which now carries the accent stripe instead — same visual
+   priority for the keys a panicking student needs, one fewer card, and the
+   printed sheet fits on one page. */
 
 section.card h2 {
   font-size: var(--fs-h2);
@@ -313,7 +305,7 @@ kbd {
   padding: 4px 10px;
   border-radius: 999px;
   background: var(--mint);
-  color: #1E7A37;
+  color: var(--badge-qol-fg);
   margin-left: var(--sp-2);
 }
 .badge-qol::before {
@@ -323,7 +315,6 @@ kbd {
   border-radius: 50%;
   background: currentColor;
 }
-[data-theme="dark"] .badge-qol { color: #7BE098; }
 
 /* ─── CALLOUTS ─────────────────────────────────────────── */
 .callout {
@@ -421,15 +412,39 @@ footer {
     --warning: #D89C2C;
     --info: #4A6FA5;
     --danger: #A8334A;
+
+    /* The QOL badge used to hardcode its dark-theme green, so this reset
+       could not reach it: printed from a dark-themed browser the pill
+       background reverted to light --mint while the text stayed mint green
+       (1.36:1), and the ::before dot, which inherits currentColor, vanished
+       with it. That badge is the sheet's only "ours versus stock" signal. */
+    --badge-qol-fg: #1E7A37;
   }
 
   html, body { background: #FFFFFF !important; color: #14102B !important; }
   .theme-toggle { display: none; }
   main { max-width: none; padding: 0; }
-  .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  .card { break-inside: avoid; box-shadow: none; border: 1px solid #BEB9CC; }
-  kbd { background: #F1ECFA !important; color: #3E3566 !important; border: 1px solid #BEB9CC; }
-  @page { margin: 12mm; }
+
+  /* One page is an acceptance criterion, not a preference. Three columns,
+     tighter cards, and a smaller display size get there; the page count is
+     verified by rendering to PDF headless, not assumed. */
+  .page-header { margin-bottom: var(--sp-4); padding-bottom: var(--sp-3); }
+  .page-header h1 { font-size: 22px; margin-bottom: var(--sp-2); }
+  .crest { margin-bottom: var(--sp-1); }
+  .lede { font-size: 10.5px; max-width: none; line-height: 1.4; }
+  .grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .card { break-inside: avoid; box-shadow: none; border: 1px solid #BEB9CC; padding: 8px 10px; }
+  section.card h2 { font-size: 13px; margin-bottom: var(--sp-2); }
+  th, td { padding: 1px 2px; font-size: 9px; line-height: 1.3; }
+  thead th { font-size: 8px; padding-bottom: 2px; }
+  td.key-cell { padding-right: var(--sp-2); }
+  kbd { background: #F1ECFA !important; color: #3E3566 !important; border: 1px solid #BEB9CC; padding: 0 3px; }
+  .note-small, ul.change-list { font-size: 9px; line-height: 1.35; margin-top: var(--sp-2); }
+  ul.change-list li { margin-bottom: 1px; }
+  .callout { font-size: 9px; padding: 4px 6px; gap: var(--sp-2); margin-top: var(--sp-2); line-height: 1.35; }
+  .badge-qol { font-size: 8px; padding: 1px 6px; }
+  footer { margin-top: var(--sp-3); padding-top: var(--sp-2); font-size: 8px; }
+  @page { margin: 10mm; }
 }
 </style>
 </head>
@@ -449,33 +464,28 @@ footer {
     </p>
   </header>
 
-  <div class="card card-accent hero">
-    <span class="v">Stuck? Start here</span>
-    <table>
-      <thead><tr><th>Key</th><th>Does</th></tr></thead>
-      <tbody>
-        <tr><td class="key-cell"><kbd>^X</kbd></td><td>Exit. Prompts to save if the file changed.</td></tr>
-        <tr><td class="key-cell"><kbd>^S</kbd></td><td>Save, no prompt. <span class="badge-qol">QOL</span></td></tr>
-      </tbody>
-    </table>
-    <p class="hero-note">These two get you out of any jam. Everything else below is detail.</p>
-  </div>
-
   <div class="grid">
 
-    <section class="card card-outline">
+    <section class="card card-accent">
       <h2>Get out</h2>
       <table>
         <thead><tr><th>Key</th><th>Does</th></tr></thead>
         <tbody>
           <tr><td class="key-cell"><kbd>^X</kbd></td><td>Exit. Prompts to save if the file changed.</td></tr>
-          <tr><td class="key-cell"><kbd>^S</kbd></td><td>Save, no prompt. <span class="badge-qol">QOL</span></td></tr>
+          <tr><td class="key-cell"><kbd>^S</kbd></td><td>Save, no prompt.</td></tr>
           <tr><td class="key-cell"><kbd>^Z</kbd></td><td>Suspend nano and drop to the shell. Type <code>fg</code> to return. <span class="badge-qol">QOL</span></td></tr>
           <tr><td class="key-cell"><kbd>^O</kbd></td><td>Save As — prompts for the filename. Stock nano's save key.</td></tr>
           <tr><td class="key-cell"><kbd>^C</kbd></td><td>Show the cursor's line, column, and character count. Does <strong>not</strong> quit.</td></tr>
         </tbody>
       </table>
       <p class="note-small">If you are stuck at a prompt, <kbd>^C</kbd> cancels it.</p>
+      <div class="callout callout-warn">
+        <span class="callout-icon">WARN</span>
+        <div>
+          <strong><kbd>^Q</kbd> does not quit — it searches backwards</strong>
+          That is nano's own default, not something this config changed. <kbd>^C</kbd> cancels the search prompt; <kbd>^X</kbd> is the way out, and it is on the help bar at all times.
+        </div>
+      </div>
     </section>
 
     <section class="card card-outline">
@@ -530,6 +540,8 @@ footer {
         <thead><tr><th>Key</th><th>Does</th></tr></thead>
         <tbody>
           <tr><td class="key-cell"><kbd>^W</kbd></td><td>Search forwards.</td></tr>
+          <tr><td class="key-cell"><kbd>^Q</kbd></td><td>Search backwards.</td></tr>
+          <tr><td class="key-cell"><kbd>^B</kbd></td><td>Search backwards, on nano 8.0 and newer. (Older nano moves the cursor left.)</td></tr>
           <tr><td class="key-cell"><kbd>M-W</kbd></td><td>Repeat the last search.</td></tr>
           <tr><td class="key-cell"><kbd>^\</kbd></td><td>Search and replace. <kbd>A</kbd> at the prompt replaces all.</td></tr>
           <tr><td class="key-cell"><kbd>M-R</kbd></td><td>Toggle regular expressions in the search prompt.</td></tr>
@@ -570,14 +582,13 @@ footer {
         <li>Tab inserts four spaces rather than a tab character.</li>
         <li>Long lines wrap on screen at word boundaries without newlines being inserted.</li>
         <li>Reopening a file returns you to where you left off.</li>
-        <li><kbd>^S</kbd> saves.</li>
         <li><kbd>^Z</kbd> suspends and drops you to the shell. Type <code>fg</code> to return.</li>
       </ul>
-      <div class="callout callout-warn">
-        <span class="callout-icon">WARN</span>
+      <div class="callout callout-info">
+        <span class="callout-icon">INFO</span>
         <div>
-          <strong><kbd>^Q</kbd> is not bound to quit</strong>
-          That is deliberate. On many terminals <kbd>^Q</kbd> is flow control and can make the terminal look frozen instead of doing anything to nano. Use <kbd>^X</kbd>.
+          <strong><kbd>^S</kbd> is not on that list</strong>
+          It already saves on stock nano, and has since 2.9.0. The config only restates that default rather than adding it.
         </div>
       </div>
     </section>

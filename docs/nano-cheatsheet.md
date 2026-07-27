@@ -11,12 +11,16 @@ will not work.
 | Key | Does |
 |:--|:--|
 | `^X` | Exit. Prompts to save if the file changed. |
-| `^S` | Save, no prompt. **(qol)** |
+| `^S` | Save, no prompt. |
 | `^Z` | Suspend nano and drop to the shell. Type `fg` to return. **(qol)** |
 | `^O` | Save As — prompts for the filename. Stock nano's save key. |
 | `^C` | Show the cursor's line, column, and character count. Does **not** quit. |
 
 If you are stuck at a prompt, `^C` cancels it.
+
+`^Q` does **not** quit. It starts a backward search — nano's own default since
+2.9.0, not something this config changed. `^C` cancels the search prompt, and
+`^X` is the way out. `^X` is on the help bar at all times.
 
 ## Move
 
@@ -59,6 +63,8 @@ nano's — use the terminal's own select-and-copy.
 | Key | Does |
 |:--|:--|
 | `^W` | Search forwards. |
+| `^Q` | Search backwards. |
+| `^B` | Search backwards, on nano 8.0 and newer. (Older nano moves the cursor left.) |
 | `M-W` | Repeat the last search. |
 | `^\` | Search and replace. `A` at the prompt replaces all. |
 | `M-R` | Toggle regular expressions in the search prompt. |
@@ -88,10 +94,10 @@ Search history is kept between sessions **(qol)** — press ↑ at the search pr
 - Tab inserts four spaces rather than a tab character.
 - Long lines wrap on screen at word boundaries without newlines being inserted.
 - Reopening a file returns you to where you left off.
-- `^S` saves.
 - `^Z` suspends and drops you to the shell. Type `fg` to return.
-- `^Q` is deliberately **not** bound to quit. On many terminals `^Q` is flow
-  control and can make the terminal look frozen. Use `^X`.
+
+`^S` is **not** in that list. It already saves on stock nano — it has since
+2.9.0 — so the config only restates the default rather than adding it.
 
 ## About `~/.nanorc`
 

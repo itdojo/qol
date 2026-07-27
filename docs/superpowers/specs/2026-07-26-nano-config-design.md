@@ -155,18 +155,49 @@ network access. The shipped includes still get written.
 
 ```
 bind ^S savefile main
+bind ^Z suspend main
 ```
 
-That is the whole list. `^S` is the one binding every student already reaches
-for, and nano's default `^O` is genuinely surprising.
+`^S` **already saves** on every build this config supports. GNU nano bound it
+to `savefile` by default in 2.9.0 (2017-11-18), and the floor here is 4.0. The
+line is kept anyway — it is explicit about a key students are told to use, it
+costs nothing, and it still does the right thing on a terminal configured to
+hand `^S` to nano differently or on a future nano that reassigns it — but it
+**restates a default rather than adding a feature**, and neither cheat sheet
+may badge it as something this config gives you.
 
-`^Q` for exit is **not** bound. It collides with XOFF terminal flow control, and
-a student on a serial console who hits it gets a terminal that appears frozen —
-which is a worse failure than not knowing the shortcut. `^X` remains the exit
-key and it is printed on the help bar at all times.
+`^Q` is left alone rather than rebound to exit. Since 2.9.0 it starts a
+**backward search**, which is useful and which `^C` cancels; rebinding it would
+take that away. `^X` remains the exit key and is printed on the help bar at all
+times. `^B` is also a backward search on nano 8.0 and newer; below that it
+moves the cursor left. Both belong in the cheat sheets' search section.
 
-`^Z` is left as suspend rather than rebound to undo. Job control is course
-material. Undo and redo stay on `M-U` and `M-E`, and go on the cheat sheet.
+`^Z` is rebound to `suspend`. Stock nano leaves plain `^Z` doing nothing at all
+— not undo, not suspend — and `man 5 nanorc`'s own EXAMPLES section gives this
+exact binding. Every other program on the system suspends on `^Z`; a dead key
+teaches the wrong lesson in a course that covers job control. `fg` returns.
+Undo and redo stay on `M-U` and `M-E`, and go on the cheat sheet.
+
+> **2026-07-27 — correction.** Two claims in the original text of this section
+> were factually wrong on every supported build, and shipped into both cheat
+> sheets and the config's own comments before being caught.
+>
+> 1. It said `^S` was a binding this config adds. It is a nano default from
+>    2.9.0, seven major versions below our 4.0 floor. Verified by driving real
+>    GNU nano 9.1 in a pty with an **empty** rcfile: `^S` reported
+>    `[ Wrote 1 line ]` and the edit landed on disk.
+> 2. It said `^Q` was left unbound because it "collides with XOFF terminal flow
+>    control" and would freeze a serial console. Both halves are wrong. `^Q` is
+>    bound — to backward search, since 2.9.0 (nano's `NEWS`: *"makes ^Q and ^S
+>    do something useful by default"*). And nano disables terminal flow control
+>    by default, which is precisely why `set preserve` exists to turn it back
+>    on; the XOFF story describes the state that directive opts into, not the
+>    state a student is in. Verified in the same pty: `^Q` opens
+>    `Search [Backwards]:`, as does `^B`.
+>
+> The right conclusion survived — do not rebind `^Q` — but for the opposite
+> reason: not because the key is dangerous, but because it already does
+> something worth keeping.
 
 ## 6. Flags
 
@@ -199,8 +230,10 @@ the machine-wide convention. Constraints:
   violet text, mono, `--r-xs`).
 - Grouped by task, not alphabetically: Save & Quit · Move · Edit · Search &
   Replace · Select & Copy · Files & Buffers · Help.
-- `^X` (exit) and `^S` (save, from our binding) get visual priority — they are
-  the two a panicking student needs.
+- `^X` (exit) and `^S` (save) get visual priority — they are the two a
+  panicking student needs. Given by the accent-stripe card variant on the
+  "Get out" section rather than by a separate hero card duplicating those two
+  rows above it.
 - Notes where the config changes stock behaviour, so the sheet is true for a
   machine set up by this installer and flags what is ours.
 
@@ -215,7 +248,10 @@ the machine-wide convention. Constraints:
 - Open a `.yaml`, a `.tf`, and a `.sh` file and confirm highlighting is applied
   and that the shipped `yaml` definition wins over the community one.
 - Validate the HTML cheat sheet renders with no network access and prints to one
-  page.
+  page. "One page" is measured, not eyeballed: render headless to PDF and count
+  `/Type /Page` objects. Do it from a dark-themed browser too — the print token
+  reset is what keeps that case legible, and a hardcoded colour that escapes it
+  is invisible rather than obviously wrong.
 
 ## Out of scope
 
