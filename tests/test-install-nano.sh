@@ -128,6 +128,25 @@ echo "== nano detection =="
 
 # Build a fake nano on disk. GNU nano's real first line is exactly
 # " GNU nano, version 9.1" — leading space, comma — per src/nano.c:657.
+#
+# The --help body is the real layout, copied from `nano --help` on GNU nano
+# 9.1: space-padded columns, no comma after the short option, and a
+# `--longopt=<value>` form for the options that take an argument. An earlier
+# version of this helper emitted ` -l, --linenumbers` with the option at end
+# of line, which meant every fixture in this suite exercised only the `$`
+# branch of nano_supports' `--$1([,= ]|$)` character class. Proven toothless:
+# narrowing that class to `[,=]` left the suite at 238 run / 0 failed while
+# both gated directives were silently written as comments against real nano.
+NANO_HELP_FIXTURE=' Option         Long option             Meaning
+ -J <number>    --guidestripe=<number>  Show a guiding bar at this column
+ -l             --linenumbers           Show line numbers in front of the text
+ -q             --indicator             Show a position+portion indicator
+ -%             --stateflags            Show some states on the title bar'
+
+# The same, minus everything a --enable-tiny build compiles out.
+NANO_HELP_FIXTURE_TINY=' Option         Long option             Meaning
+ -l             --linenumbers           Show line numbers in front of the text'
+
 make_stub_nano() {
     local dir="$1" version="$2"
     mkdir -p "$dir"
@@ -135,7 +154,7 @@ make_stub_nano() {
 #!/usr/bin/env bash
 case "\$1" in
     --version) printf ' GNU nano, version %s\n' "$version"; exit 0 ;;
-    --help)    printf ' -l, --linenumbers\n -q, --indicator\n -%%, --stateflags\n'; exit 0 ;;
+    --help)    printf '%s\n' "$NANO_HELP_FIXTURE"; exit 0 ;;
 esac
 exit 1
 STUB
@@ -196,11 +215,11 @@ test_capability_probe() {
     # A --enable-tiny build: modern version number, but the gated options are
     # compiled out. This is why we probe --help instead of comparing versions.
     mkdir -p "$tmp/tiny"
-    cat > "$tmp/tiny/nano" <<'STUB'
+    cat > "$tmp/tiny/nano" <<STUB
 #!/usr/bin/env bash
-case "$1" in
+case "\$1" in
     --version) printf ' GNU nano, version 8.0\n'; exit 0 ;;
-    --help)    printf ' -l, --linenumbers\n'; exit 0 ;;
+    --help)    printf '%s\n' "$NANO_HELP_FIXTURE_TINY"; exit 0 ;;
 esac
 exit 1
 STUB
@@ -212,14 +231,34 @@ STUB
     assert_ok 'nano_supports stateflags'  "full build supports stateflags"
     assert_fail 'nano_supports zero'      "stub does not advertise zero"
 
+    # nano_supports' character class has three branches — `,`, `=`, and a
+    # space — plus an end-of-line anchor, and every one of them needs a
+    # fixture that actually reaches it. The three assertions above cover the
+    # space branch (real nano pads its columns with spaces). This covers the
+    # `=` branch: options that take an argument are printed as
+    # `--guidestripe=<number>`, so a class without `=` would fail to see
+    # them entirely.
+    assert_ok 'nano_supports guidestripe' \
+        "an option printed in --longopt=<value> form is still detected"
+
     load_nano_help "$tmp/tiny/nano"
     assert_ok   'nano_supports linenumbers' "tiny build supports linenumbers"
     assert_fail 'nano_supports indicator'   "tiny build lacks indicator despite 8.0"
     assert_fail 'nano_supports stateflags'  "tiny build lacks stateflags despite 8.0"
+    assert_fail 'nano_supports guidestripe' "tiny build lacks guidestripe too"
 
     # A substring must not produce a false positive: --line must not match
     # --linenumbers.
     assert_fail 'nano_supports line' "partial option name does not match"
+
+    # The remaining branch: the `$` anchor. Real nano never prints an option
+    # at end of line, so no faithful fixture reaches it — but a truncated or
+    # differently-formatted --help could, and dropping `$` from the class
+    # would then silently report a supported option as missing. One
+    # deliberately unfaithful fixture, kept small and labelled as such.
+    nano_help_cache=' -q             --indicator'
+    assert_ok 'nano_supports indicator' \
+        "an option at end of line is still detected (the \$ branch)"
 
     rm -rf "$tmp"
 }
@@ -378,9 +417,7 @@ test_render_nanorc() {
     QOL_NANO_PREFIXES="$tmp/share/nano"
 
     # --- full-capability build ---
-    nano_help_cache=' -l, --linenumbers
- -q, --indicator
- -%, --stateflags'
+    nano_help_cache="$NANO_HELP_FIXTURE"
     local out; out="$(render_nanorc)"
 
     assert_contains "$out" "$BLOCK_START" "block start marker present"
@@ -434,7 +471,7 @@ set stateflags" "gated: stateflags written"
 
     # --- tiny build ---
     # shellcheck disable=SC2034  # read by nano_supports (via render_nanorc), not directly in this file
-    nano_help_cache=' -l, --linenumbers'
+    nano_help_cache="$NANO_HELP_FIXTURE_TINY"
     out="$(render_nanorc)"
     assert_contains "$out" "set linenumbers" "tiny: core still written"
     assert_not_contains "$out" "
@@ -477,9 +514,7 @@ test_managed_block() {
     SYNTAX_DIR="$tmp/absent"
     QOL_NANO_PREFIXES="$tmp/share/nano"
     # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc), not directly in this file
-    nano_help_cache=' -l, --linenumbers
- -q, --indicator
- -%, --stateflags'
+    nano_help_cache="$NANO_HELP_FIXTURE"
 
     # A pre-existing user config with a setting of their own.
     printf 'set nowrap\n' > "$NANORC"
@@ -570,7 +605,7 @@ test_mode_preservation() {
     SYNTAX_DIR="$tmp/absent"
     QOL_NANO_PREFIXES="$tmp/share/nano"
     # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc), not directly in this file
-    nano_help_cache=' -l, --linenumbers'
+    nano_help_cache="$NANO_HELP_FIXTURE_TINY"
 
     local mode
     for mode in 640 600; do
@@ -599,7 +634,7 @@ test_symlink_survival() {
     SYNTAX_DIR="$tmp/absent"
     QOL_NANO_PREFIXES="$tmp/share/nano"
     # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc), not directly in this file
-    nano_help_cache=' -l, --linenumbers'
+    nano_help_cache="$NANO_HELP_FIXTURE_TINY"
 
     printf 'set nowrap\n' > "$real"
     ln -s "$real" "$NANORC"
