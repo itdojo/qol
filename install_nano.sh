@@ -257,6 +257,8 @@ nano_supports() {
 syntax_include_globs() {
     local prefixes dir
 
+    # QOL_NANO_PREFIXES is a test seam: it lets tests point this function at a
+    # fixture tree instead of real system paths. Unset in normal operation.
     if [[ -n "${QOL_NANO_PREFIXES:-}" ]]; then
         prefixes="$QOL_NANO_PREFIXES"
     else
@@ -272,13 +274,22 @@ syntax_include_globs() {
     fi
 
     # Shipped packs last — they win ties.
-    # shellcheck disable=SC2086  # deliberate word-splitting: $prefixes is a
-    # newline- or space-separated string (bash 3.2 has no arrays for this).
+    #
+    # Split on newlines only. An unscoped split would also break on spaces,
+    # silently discarding any prefix whose path contains one — the directory
+    # would simply never appear in the output, and the user would see missing
+    # highlighting with nothing explaining it.
+    local old_ifs="$IFS"
+    IFS=$'\n'
+    # shellcheck disable=SC2086  # deliberate word-splitting, scoped to newlines by IFS above
     for dir in $prefixes; do
         [[ -d "$dir" ]] || continue
         printf '%s/*.nanorc\n' "$dir"
-        [[ -d "$dir/extra" ]] && printf '%s/extra/*.nanorc\n' "$dir"
+        if [[ -d "$dir/extra" ]]; then
+            printf '%s/extra/*.nanorc\n' "$dir"
+        fi
     done
+    IFS="$old_ifs"
 }
 
 # ---------------------------------------------------------------------------

@@ -285,7 +285,9 @@ test_syntax_include_globs() {
 
     local saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
     SYNTAX_DIR="$tmp/home/.nano"
-    QOL_NANO_PREFIXES="$tmp/share/nano $tmp/deb/nano-syntax-highlighting $tmp/nonexistent"
+    QOL_NANO_PREFIXES="$tmp/share/nano
+$tmp/deb/nano-syntax-highlighting
+$tmp/nonexistent"
 
     local out; out="$(syntax_include_globs)"
 
@@ -303,6 +305,25 @@ $tmp/deb/nano-syntax-highlighting/*.nanorc" "$out" \
     out="$(syntax_include_globs)"
     assert_not_contains "$out" "absent" "absent community dir is skipped"
     assert_contains "$out" "$tmp/share/nano/*.nanorc" "shipped path still present"
+
+    # Regression: a prefix path containing a space must survive intact.
+    # Splitting on IFS's default (space/tab/newline) would break "share nano"
+    # into "share" and "nano", neither of which exists, and the directory
+    # would silently vanish from the output.
+    mkdir -p "$tmp/share nano"
+    touch "$tmp/share nano/perl.nanorc"
+    SYNTAX_DIR="$tmp/absent"
+    QOL_NANO_PREFIXES="$tmp/share nano"
+    out="$(syntax_include_globs)"
+    assert_contains "$out" "$tmp/share nano/*.nanorc" \
+        "prefix path containing a space is kept intact"
+
+    # syntax_include_globs must not leak a modified IFS to its caller.
+    local ifs_before ifs_after
+    ifs_before="$IFS"
+    syntax_include_globs >/dev/null
+    ifs_after="$IFS"
+    assert_eq "$ifs_before" "$ifs_after" "IFS is restored after the call"
 
     SYNTAX_DIR="$saved_dir"
     QOL_NANO_PREFIXES="$saved_prefixes"
