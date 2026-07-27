@@ -242,8 +242,9 @@ test_capability_probe_errors() {
     assert_fail 'nano_supports linenumbers' \
         "no probe matches after a failed load (not executable)"
 
-    # Real pico, when present (macOS ships it at /usr/bin/nano). Guarded so
-    # the suite still passes on Linux, where that path is real GNU nano.
+    # Real pico, when present (macOS ships it at /usr/bin/nano). The guard is
+    # a capability probe, not a platform claim: on Linux /usr/bin/nano is
+    # normally real GNU nano, so the block simply does not run there.
     #
     # TERM=dumb and </dev/null are load-bearing here, exactly as in
     # nano_version above: an unguarded `/usr/bin/nano --version` blocks for
@@ -548,9 +549,16 @@ test_managed_block
 echo
 echo "== replace_file_contents: mode, symlinks, truncation safety =="
 
-# Portable octal mode, BSD stat (macOS) first, then GNU stat (Linux).
+# Portable octal mode, GNU stat (Linux) first, then BSD stat (macOS).
+#
+# The two calls are separate statements for the same reason
+# replace_file_contents' copy of this idiom is: GNU `stat -f` means
+# `--file-system`, so on Linux the BSD-first form printed a filesystem dump
+# to stdout before failing, and anything capturing this function got that
+# dump concatenated with the real answer.
 file_mode() {
-    stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null
+    stat -c '%a' "$1" 2>/dev/null && return 0
+    stat -f '%Lp' "$1" 2>/dev/null
 }
 
 test_mode_preservation() {

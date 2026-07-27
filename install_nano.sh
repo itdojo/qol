@@ -501,9 +501,18 @@ replace_file_contents() {
     done
 
     # BSD and GNU stat disagree on flags; try both before giving up.
-    mode="$(stat -f '%Lp' "$target" 2>/dev/null \
-        || stat -c '%a' "$target" 2>/dev/null \
-        || echo 644)"
+    #
+    # Three SEPARATE assignments, not one command substitution chained with
+    # `||`. Chained inside a single `$( )`, all three commands share one
+    # stdout, so their output concatenates — and GNU stat's `-f` means
+    # `--file-system`, so on Linux it read "%Lp" as a filename, printed a
+    # multi-line filesystem dump to stdout, and failed. `mode` became that
+    # dump with `644` appended, `chmod` rejected it, and every write path in
+    # this script died. Reproduced on Debian: exit 1 with an empty ~/.nanorc.
+    # GNU form goes first because Linux is where the failure was fatal.
+    mode="$(stat -c '%a' "$target" 2>/dev/null)" \
+        || mode="$(stat -f '%Lp' "$target" 2>/dev/null)" \
+        || mode=644
 
     tmp="$(mktemp "${target}.XXXXXX" 2>/dev/null)" || {
         log_err "Could not create a temporary file next to $target"
