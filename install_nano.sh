@@ -557,12 +557,110 @@ remove_managed_block() {
         log_err "Could not create a temporary file to update $file."
         return 1
     }
+    # The exit status is checked, not assumed. `set -e` cannot help here:
+    # every caller of this function sits in a `||` context, which disarms it
+    # for the whole call tree below. An unchecked awk that died partway
+    # through (a broken awk on PATH, a full disk, SIGPIPE) would hand a
+    # truncated temp file straight to replace_file_contents, which would then
+    # atomically install that truncation over the user's real config — while
+    # the script went on to print "nano is ready" and exit 0.
     awk -v s="$BLOCK_START" -v e="$BLOCK_END" '
         index($0, s) { skip = 1 }
         !skip { print }
         index($0, e) { skip = 0 }
-    ' "$file" > "$tmp"
+    ' "$file" > "$tmp" || {
+        rm -f "$tmp"
+        log_err "Could not rewrite $file while removing its previous managed block."
+        return 1
+    }
     replace_file_contents "$tmp" "$file"
+}
+
+# Replace the managed block at the end of FILE with fresh output from
+# RENDERER, atomically and idempotently.
+#
+# Both ~/.nanorc and the shell rc files touched by --set-editor get exactly
+# this treatment. They used not to: write_nanorc did it properly while
+# set_default_editor appended with a bare `cat >> "$rc"` that started directly
+# at its own start marker. On an rc file whose last line had no trailing
+# newline, run 1 produced
+#
+#     export IMPORTANT_SETTING=1# >>> qol nano editor >>>
+#
+# which `bash -n` rejects as a syntax error, so every new terminal errored and
+# stopped sourcing the file — and run 2 then matched that combined line as the
+# block start and deleted the user's setting along with the block, taking no
+# backup because the file already contained the marker. One helper used by
+# both callers is the only way that stays fixed.
+#
+# Three details are load-bearing:
+#   1. The previous block is excised first, so reruns cannot duplicate it.
+#   2. Trailing blank lines are trimmed, so reruns are byte-identical instead
+#      of growing one blank line each time. Only *trailing* blanks go — blank
+#      lines inside the user's own config are their spacing and must survive,
+#      which is why this records every line and prints up to the last
+#      non-blank one rather than using a simpler `NF { print }`.
+#   3. That trim rewrites the file through awk's `print`, which terminates
+#      every line it emits — so the file is guaranteed to end in a newline
+#      before the renderer appends, whatever shape it arrived in. The renderer
+#      supplies its own leading blank line for separation.
+#
+# The caller keeps ownership of backups; this returns non-zero with a ❌ line
+# already printed on every failure path.
+#
+#   replace_managed_block <file> <start-marker> <end-marker> <renderer-fn>
+replace_managed_block() {
+    local file="$1" start="$2" end="$3" renderer="$4"
+
+    # remove_managed_block reads its markers from globals. Swap them around
+    # the call and restore them unconditionally — a bare call that failed
+    # would trip `set -e` and skip straight past the restore, leaving the
+    # globals pointed at this block's markers for whatever ran next.
+    local saved_start="$BLOCK_START" saved_end="$BLOCK_END"
+    BLOCK_START="$start"
+    BLOCK_END="$end"
+    local remove_rc=0
+    remove_managed_block "$file" || remove_rc=$?
+    BLOCK_START="$saved_start"
+    BLOCK_END="$saved_end"
+    if [[ "$remove_rc" -ne 0 ]]; then
+        log_err "Could not update $file while removing its previous managed block."
+        return 1
+    fi
+
+    local tmp
+    tmp="$(mktemp 2>/dev/null)" || {
+        log_err "Could not create a temporary file to rewrite $file."
+        return 1
+    }
+    # Checked for the same reason as the awk in remove_managed_block above:
+    # a failing awk here previously replaced ~/.nanorc with partial output
+    # while the script reported success.
+    awk '{ lines[NR] = $0 }
+         END {
+             last = 0
+             for (i = 1; i <= NR; i++) if (lines[i] ~ /[^[:space:]]/) last = i
+             for (i = 1; i <= last; i++) print lines[i]
+         }' "$file" > "$tmp" || {
+        rm -f "$tmp"
+        log_err "Could not rewrite $file while trimming its trailing blank lines."
+        return 1
+    }
+    replace_file_contents "$tmp" "$file" || {
+        log_err "Could not update $file while trimming trailing blank lines."
+        return 1
+    }
+
+    # Grouped so the outer 2>/dev/null also catches the redirection-open
+    # failure itself (e.g. a genuinely read-only $file), not just the
+    # renderer's own stderr. A trailing `2>/dev/null` on this line alone
+    # would not: `>>` is set up before that redirection takes effect, so an
+    # open failure would still print to the original stderr first — confirmed
+    # empirically before relying on it.
+    if ! { "$renderer" >> "$file"; } 2>/dev/null; then
+        log_err "Could not append the managed block to $file (permission denied?)."
+        return 1
+    fi
 }
 
 write_nanorc() {
@@ -574,10 +672,7 @@ write_nanorc() {
     # with nothing but a raw tool error (e.g. `touch: No such file or
     # directory` for a dangling symlink, or a stray .bak with no explanation
     # of what happened next). main() wraps this call in `|| exit 1`, exactly
-    # like install_nano_package and resolve_nano. The underlying commands'
-    # own stderr is suppressed once there's a clearer ❌ line of our own —
-    # otherwise a failure reads as two stacked messages, a raw tool line
-    # right above the branded one.
+    # like install_nano_package and resolve_nano.
     if [[ ! -f "$NANORC" ]]; then
         if ! touch "$NANORC" 2>/dev/null; then
             log_err "Could not create $NANORC (dangling symlink to a missing directory?)."
@@ -596,48 +691,7 @@ write_nanorc() {
         backup_path="$LAST_BACKUP_PATH"
     fi
 
-    remove_managed_block "$NANORC" || {
-        log_err "Could not update $NANORC while removing its previous qol block."
-        [[ -n "$backup_path" ]] && rm -f "$backup_path"
-        return 1
-    }
-
-    # Strip trailing blank lines left behind by block removal. Without this,
-    # every rerun would add one more blank line above the block and the
-    # "byte-identical rerun" guarantee would fail on the second run.
-    # Only *trailing* blanks go — blank lines inside the user's own config are
-    # their spacing and must survive.
-    #
-    # Records every line in an array and remembers the index of the last
-    # non-blank one, then prints up to that index. A simpler `NF { print }`
-    # would drop every blank line in the file, including the user's own
-    # interior spacing — not just the trailing run left by block removal.
-    local tmp
-    tmp="$(mktemp 2>/dev/null)" || {
-        log_err "Could not create a temporary file to rewrite $NANORC."
-        [[ -n "$backup_path" ]] && rm -f "$backup_path"
-        return 1
-    }
-    awk '{ lines[NR] = $0 }
-         END {
-             last = 0
-             for (i = 1; i <= NR; i++) if (lines[i] ~ /[^[:space:]]/) last = i
-             for (i = 1; i <= last; i++) print lines[i]
-         }' "$NANORC" > "$tmp"
-    replace_file_contents "$tmp" "$NANORC" || {
-        log_err "Could not update $NANORC while trimming trailing blank lines."
-        [[ -n "$backup_path" ]] && rm -f "$backup_path"
-        return 1
-    }
-
-    # Grouped so the outer 2>/dev/null also catches the redirection-open
-    # failure itself (e.g. a genuinely read-only $NANORC), not just
-    # render_nanorc's own stderr. A trailing `2>/dev/null` on this line
-    # alone would not: `>>` is set up before that redirection takes effect,
-    # so an open failure would still print to the original stderr first —
-    # confirmed empirically before relying on it.
-    if ! { render_nanorc >> "$NANORC"; } 2>/dev/null; then
-        log_err "Could not append the qol block to $NANORC."
+    if ! replace_managed_block "$NANORC" "$BLOCK_START" "$BLOCK_END" render_nanorc; then
         [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 1
     fi
@@ -847,8 +901,31 @@ Upgrade nano and run this script again."
 EDITOR_BLOCK_START="# >>> qol nano editor >>>"
 EDITOR_BLOCK_END="# <<< qol nano editor <<<"
 
+# The editor block's counterpart to render_nanorc: emit the whole block,
+# markers included, with its own leading blank line. Written as a renderer
+# function rather than an inline `cat >>` precisely so replace_managed_block
+# can own the framing — see that function's comment for what the inline
+# version got wrong.
+render_editor_block() {
+    printf '\n%s\n' "$EDITOR_BLOCK_START"
+    cat <<'BODY'
+# Managed by install_nano.sh — rewritten on every rerun.
+# Put your own settings ABOVE this block, not below it: the block is always
+# re-appended at the end of the file, so anything you add below it today
+# ends up above it after the next run.
+export EDITOR=nano
+export VISUAL=nano
+BODY
+    printf '%s\n' "$EDITOR_BLOCK_END"
+}
+
 set_default_editor() {
-    local shell_name rcs
+    # `rc` is declared here, with the others. It used to be declared halfway
+    # down the function, below a `while IFS= read -r rc` in the dry-run
+    # branch that ran first — so on a dry run it was assigned before it was
+    # ever made local, which dynamically clobbered main()'s own `local rc`
+    # (the variable holding resolve_nano's exit status).
+    local shell_name rcs rc
     shell_name="$(basename "${SHELL:-/bin/bash}")"
     case "$shell_name" in
         zsh)
@@ -885,7 +962,6 @@ EOF
         return 0
     fi
 
-    local rc
     while IFS= read -r rc; do
         [[ -n "$rc" ]] || continue
 
@@ -909,44 +985,13 @@ EOF
             backup_path="$LAST_BACKUP_PATH"
         fi
 
-        # Reuse the block-removal logic against this block's own markers.
-        # remove_managed_block is called via `|| remove_rc=$?`, not bare —
-        # a bare call that fails would trigger `set -e` immediately and skip
-        # right past the BLOCK_START/BLOCK_END restore below it, leaving the
-        # globals pointed at the editor block's markers for whatever runs
-        # next.
-        local saved_start="$BLOCK_START" saved_end="$BLOCK_END"
-        BLOCK_START="$EDITOR_BLOCK_START"
-        BLOCK_END="$EDITOR_BLOCK_END"
-        local remove_rc=0
-        remove_managed_block "$rc" || remove_rc=$?
-        BLOCK_START="$saved_start"
-        BLOCK_END="$saved_end"
-        if [[ "$remove_rc" -ne 0 ]]; then
-            log_err "Could not update $rc while removing its previous EDITOR block."
-            [[ -n "$backup_path" ]] && rm -f "$backup_path"
-            return 1
-        fi
-
-        # Grouped so the outer 2>/dev/null also catches the redirection-open
-        # failure itself (e.g. a genuinely read-only $rc), not just
-        # whatever `cat` itself would print — the `>>` is set up before a
-        # trailing `2>/dev/null` on this same line would take effect, so it
-        # would not otherwise be suppressed. Same fix as write_nanorc's
-        # final append, confirmed empirically there before relying on it.
-        if ! { cat >> "$rc" <<EOF
-$EDITOR_BLOCK_START
-# Managed by install_nano.sh — rewritten on every rerun.
-# Put your own settings ABOVE this block, not below it: the block is always
-# re-appended at the end of the file, so anything you add below it today
-# ends up above it after the next run.
-export EDITOR=nano
-export VISUAL=nano
-$EDITOR_BLOCK_END
-EOF
-        } 2>/dev/null
-        then
-            log_err "Could not write to $rc (permission denied?)."
+        # Exactly the same block treatment ~/.nanorc gets, through exactly
+        # the same helper. This used to be a hand-rolled `cat >> "$rc"` that
+        # skipped the trailing-blank trim and the leading newline, which is
+        # how it came to corrupt an rc file with no final newline and then
+        # delete a line from it on the next run.
+        if ! replace_managed_block "$rc" \
+                "$EDITOR_BLOCK_START" "$EDITOR_BLOCK_END" render_editor_block; then
             [[ -n "$backup_path" ]] && rm -f "$backup_path"
             return 1
         fi

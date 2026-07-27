@@ -696,9 +696,100 @@ test_truncation_safety() {
     rm -rf "$tmp"
 }
 
+# Both awks that feed replace_file_contents used to run unchecked. `set -e`
+# cannot catch them — every caller sits in a `||` context, which disarms it
+# for the whole call tree — so a failing awk handed a truncated temp file
+# straight to an atomic rename over the user's real config, while the script
+# printed "nano is ready" and exited 0.
+#
+# The failure is injected with an awk on PATH that emits partial output and
+# then exits 1, which is what a broken awk, a full disk, and a killed process
+# all look like from inside these functions.
+test_awk_failure_never_truncates() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/badbin" "$tmp/share/nano"
+
+    # Absolute shebang, same reasoning as make_stub_mgr: nothing here should
+    # depend on what else is reachable when PATH is being manipulated.
+    cat > "$tmp/badbin/awk" <<'STUB'
+#!/bin/bash
+printf 'PARTIAL OUTPUT\n'
+exit 1
+STUB
+    chmod +x "$tmp/badbin/awk"
+
+    local saved_rc="$NANORC" saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    local saved_path="$PATH"
+    NANORC="$tmp/nanorc"
+    SYNTAX_DIR="$tmp/absent"
+    QOL_NANO_PREFIXES="$tmp/share/nano"
+    # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc)
+    nano_help_cache="$NANO_HELP_FIXTURE_TINY"
+
+    # --- the trailing-blank trim awk ------------------------------------
+    # No managed block in the file yet, so remove_managed_block's own grep
+    # short-circuits and the trim is the first awk reached.
+    printf 'set nowrap\nset tabsize 2\n' > "$NANORC"
+    PATH="$tmp/badbin:$saved_path"
+    local rc=0
+    write_nanorc >/dev/null 2>&1 || rc=$?
+    PATH="$saved_path"
+
+    assert_eq "1" "$rc" "a failing trim awk makes write_nanorc fail"
+    assert_eq "set nowrap
+set tabsize 2" "$(cat "$NANORC")" \
+        "a failing trim awk leaves the user's config byte-for-byte intact"
+    assert_eq "0" "$(find "$tmp" -name 'nanorc.pre-nano.*.bak' | wc -l | tr -d ' ')" \
+        "a failing trim awk cleans up the backup it took for a write that never landed"
+
+    # --- remove_managed_block's excision awk ------------------------------
+    # Plant a real block first, with a working awk, so the grep no longer
+    # short-circuits and the excision awk runs before the trim.
+    write_nanorc >/dev/null 2>&1
+    local planted; planted="$(cat "$NANORC")"
+    assert_contains "$planted" "$BLOCK_START" "sanity: a block was planted with a working awk"
+
+    PATH="$tmp/badbin:$saved_path"
+    rc=0
+    write_nanorc >/dev/null 2>&1 || rc=$?
+    PATH="$saved_path"
+
+    assert_eq "1" "$rc" "a failing block-removal awk makes write_nanorc fail"
+    assert_eq "$planted" "$(cat "$NANORC")" \
+        "a failing block-removal awk leaves the previous config byte-for-byte intact"
+
+    NANORC="$saved_rc"
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
+# backup_file's contract is that the backup is a usable copy, not just a
+# plausible filename. Every existing assertion only counted `.bak` files, so
+# replacing the `cp` with a `touch` would have gone unnoticed.
+test_backup_file_copies_content() {
+    local tmp; tmp="$(mktemp -d)"
+    local f="$tmp/original"
+    printf 'line one\nline two\n' > "$f"
+
+    assert_ok "backup_file '$f' >/dev/null" "backup_file succeeds on a real file"
+    assert_ok "[ -n \"\$LAST_BACKUP_PATH\" ]" "backup_file reports the path it wrote"
+    assert_eq "line one
+line two" "$(cat "$LAST_BACKUP_PATH")" \
+        "the backup holds the original's actual content, not an empty placeholder"
+
+    # A missing file is a no-op, not a failure, and must report no path.
+    assert_ok "backup_file '$tmp/absent' >/dev/null" "backup_file is a no-op on a missing file"
+    assert_eq "" "$LAST_BACKUP_PATH" "no backup path is reported when there was nothing to copy"
+
+    rm -rf "$tmp"
+}
+
 test_mode_preservation
 test_symlink_survival
 test_truncation_safety
+test_awk_failure_never_truncates
+test_backup_file_copies_content
 
 echo
 echo "== package manager detection =="
@@ -1332,10 +1423,109 @@ test_set_editor_bash_login() {
     rm -rf "$tmp"
 }
 
+# The rc file most likely to be hand-edited is the one most likely to have
+# no trailing newline on its last line — `printf 'export X=1' >> ~/.zshrc`,
+# a text editor configured not to add one, a heredoc without a final blank.
+#
+# set_default_editor used to append with a bare `cat >> "$rc"` starting
+# directly at its start marker, so on such a file run 1 produced
+#
+#     export IMPORTANT_SETTING=1# >>> qol nano editor >>>
+#
+# which bash refuses to parse, so every new terminal errored and stopped
+# sourcing the file — and run 2 then matched that combined line as the block
+# start and DELETED the user's setting along with the block, taking no backup
+# because the file already contained the marker. Three runs, because the
+# corruption and the deletion are two different runs.
+test_set_editor_rc_without_trailing_newline() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local rcfile="$tmp/home/.zshrc"
+    printf 'export IMPORTANT_SETTING=1' > "$rcfile"   # deliberately no \n
+    assert_eq "0" "$(tail -c1 "$rcfile" | wc -l | tr -d ' ')" \
+        "sanity: the fixture rc file really has no trailing newline"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local run prev=""
+    for run in 1 2 3; do
+        SHELL=/bin/zsh QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+            ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+
+        assert_eq "1" "$(grep -c '^export IMPORTANT_SETTING=1$' "$rcfile")" \
+            "run $run: the user's own setting survives, alone on its own line"
+        assert_ok "bash -n '$rcfile'" \
+            "run $run: the rc file is still valid shell syntax"
+        assert_eq "1" "$(grep -cF "$EDITOR_BLOCK_START" "$rcfile")" \
+            "run $run: exactly one editor-block start marker"
+        assert_eq "1" "$(grep -cF "$EDITOR_BLOCK_END" "$rcfile")" \
+            "run $run: exactly one editor-block end marker"
+        assert_eq "1" "$(grep -c '^export EDITOR=nano$' "$rcfile")" \
+            "run $run: exactly one EDITOR export"
+
+        # Runs 2 and 3 must be byte-identical to the run before them.
+        local now; now="$(cat "$rcfile")"
+        if [[ "$run" -gt 1 ]]; then
+            assert_eq "$prev" "$now" "run $run: byte-identical to the previous run"
+        fi
+        prev="$now"
+    done
+
+    # And the file this run touched must itself end in a newline, so the next
+    # tool to append to it does not inherit the same problem.
+    assert_eq "1" "$(tail -c1 "$rcfile" | wc -l | tr -d ' ')" \
+        "the rewritten rc file ends in a newline"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+# The same shape for ~/.nanorc, which the shared helper also owns. A user who
+# hand-wrote a .nanorc without a final newline would otherwise get
+# `set nowrap# >>> qol nano block >>>` — an rc syntax error nano reports on
+# every single launch.
+test_write_nanorc_no_trailing_newline() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/share/nano"
+
+    local saved_rc="$NANORC" saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    NANORC="$tmp/nanorc"
+    SYNTAX_DIR="$tmp/absent"
+    QOL_NANO_PREFIXES="$tmp/share/nano"
+    # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc)
+    nano_help_cache="$NANO_HELP_FIXTURE"
+
+    printf 'set nowrap' > "$NANORC"   # deliberately no \n
+
+    local run prev=""
+    for run in 1 2 3; do
+        write_nanorc >/dev/null 2>&1
+        assert_eq "1" "$(grep -c '^set nowrap$' "$NANORC")" \
+            "nanorc run $run: the user's own setting survives, alone on its own line"
+        assert_eq "1" "$(grep -cF "$BLOCK_START" "$NANORC")" \
+            "nanorc run $run: exactly one start marker"
+        local now; now="$(cat "$NANORC")"
+        if [[ "$run" -gt 1 ]]; then
+            assert_eq "$prev" "$now" "nanorc run $run: byte-identical to the previous run"
+        fi
+        prev="$now"
+    done
+
+    NANORC="$saved_rc"
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
 test_dry_run_writes_nothing
 test_real_run_writes_config
 test_set_editor_is_opt_in
 test_set_editor_bash_login
+test_set_editor_rc_without_trailing_newline
+test_write_nanorc_no_trailing_newline
 
 echo
 echo "== main: pico vs genuinely-absent nano =="
