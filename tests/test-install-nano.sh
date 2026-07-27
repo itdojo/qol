@@ -618,5 +618,124 @@ test_mode_preservation
 test_symlink_survival
 test_truncation_safety
 
+echo
+echo "== package manager detection =="
+
+# Build a stub package-manager executable that records whether it was ever
+# actually run, so tests can prove install_nano_package's dry-run path never
+# invokes it.
+make_stub_mgr() {
+    local dir="$1" name="$2" marker="$3"
+    mkdir -p "$dir"
+    cat > "$dir/$name" <<STUB
+#!/usr/bin/env bash
+printf 'ran\n' >> "$marker"
+exit 0
+STUB
+    chmod +x "$dir/$name"
+}
+
+test_detect_pkg_manager() {
+    local tmp; tmp="$(mktemp -d)"
+    local saved_path="$PATH"
+
+    # Build every fixture directory up front, while PATH still has mkdir/chmod
+    # on it — narrowing PATH must happen only around the assertions below.
+    mkdir -p "$tmp/empty"
+    make_stub_mgr "$tmp/apt_only" "apt-get" "$tmp/apt.marker"
+    make_stub_mgr "$tmp/both" "brew" "$tmp/both.marker"
+    make_stub_mgr "$tmp/both" "apt-get" "$tmp/both.marker"
+
+    # Nothing on PATH at all: detection must fail, not silently pick something.
+    # Deliberately a full replacement, not "$tmp/empty:$saved_path" — this
+    # dev machine has real brew/apt on PATH, and a fallback would defeat the
+    # "no manager found" case entirely.
+    # shellcheck disable=SC2123
+    PATH="$tmp/empty"
+    assert_fail 'detect_pkg_manager >/dev/null 2>&1' \
+        "no package manager on PATH fails detection"
+
+    # apt-get is reported as "apt" — the -get suffix is stripped. Full
+    # replacement again, so only the stub is visible.
+    # shellcheck disable=SC2123
+    PATH="$tmp/apt_only"
+    assert_eq "apt" "$(detect_pkg_manager)" "apt-get normalizes to apt"
+
+    # brew is checked first, so it wins when several managers are present —
+    # this matters on a Linuxbrew box that also has apt-get.
+    # shellcheck disable=SC2123
+    PATH="$tmp/both"
+    assert_eq "brew" "$(detect_pkg_manager)" "brew takes priority over apt-get"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_detect_pkg_manager
+
+echo
+echo "== install_nano_package dry-run =="
+
+test_install_nano_package_dry_run() {
+    local tmp; tmp="$(mktemp -d)"
+    local saved_path="$PATH" saved_dry_run="$DRY_RUN"
+    local marker="$tmp/brew.ran"
+
+    make_stub_mgr "$tmp/brew" "brew" "$marker"
+
+    # Full replacement, not a prepend: only the stub brew must be reachable,
+    # so a bug that skips the dry-run guard can never fall through to a real
+    # package manager on this machine's PATH.
+    # shellcheck disable=SC2123
+    PATH="$tmp/brew"
+    DRY_RUN=1
+    local out status
+    out="$(install_nano_package 2>&1)"
+    status=$?
+
+    assert_eq "0" "$status" "dry-run install_nano_package exits 0"
+    assert_contains "$out" "[dry-run]" "dry-run output announces itself"
+    assert_contains "$out" "brew" "dry-run output names the detected manager"
+    assert_eq "absent" "$([[ -f "$marker" ]] && echo present || echo absent)" \
+        "dry-run never actually executes the package manager"
+
+    DRY_RUN="$saved_dry_run"
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_install_nano_package_dry_run
+
+echo
+echo "== nano resolution =="
+
+test_resolve_nano() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/good" "9.1"
+    make_stub_nano "$tmp/ancient" "2.9.7"
+    make_stub_pico "$tmp/pico"
+
+    local saved_path="$PATH"
+
+    PATH="$tmp/good:$saved_path"
+    assert_eq "$tmp/good/nano" "$(resolve_nano 2>/dev/null)" "modern nano is accepted"
+
+    PATH="$tmp/ancient:$saved_path"
+    assert_fail 'resolve_nano >/dev/null 2>&1' "nano 2.9.7 is rejected (below 4.0)"
+
+    PATH="$tmp/pico:$saved_path"
+    assert_fail 'resolve_nano >/dev/null 2>&1' "pico is rejected"
+
+    # The pico rejection must explain itself — this is the single most likely
+    # failure a macOS student hits.
+    local msg; msg="$(PATH="$tmp/pico:$saved_path" resolve_nano 2>&1 || true)"
+    assert_contains "$msg" "pico" "pico rejection names pico"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_resolve_nano
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

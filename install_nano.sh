@@ -477,6 +477,81 @@ write_nanorc() {
 }
 
 # ---------------------------------------------------------------------------
+# Installing nano
+# ---------------------------------------------------------------------------
+detect_pkg_manager() {
+    local mgr
+    for mgr in brew apt-get dnf pacman apk zypper; do
+        if command -v "$mgr" >/dev/null 2>&1; then
+            printf '%s\n' "${mgr%-get}"
+            return 0
+        fi
+    done
+    return 1
+}
+
+install_nano_package() {
+    local mgr
+    mgr="$(detect_pkg_manager)" || {
+        log_err "No supported package manager found (brew, apt-get, dnf, pacman, apk, zypper)."
+        return 1
+    }
+
+    log_step "Installing GNU nano via $mgr..."
+    if [[ -n "$DRY_RUN" ]]; then
+        log_info "[dry-run] would install nano with $mgr"
+        return 0
+    fi
+
+    local sudo_cmd=""
+    if [[ "$mgr" != "brew" && "$(id -u)" -ne 0 ]]; then
+        sudo_cmd="sudo"
+    fi
+
+    # $sudo_cmd is deliberately unquoted below: when empty it must vanish
+    # entirely rather than expand to an empty-string argument, which some of
+    # these package managers would choke on.
+    # shellcheck disable=SC2086
+    case "$mgr" in
+        brew)   brew install nano ;;
+        apt)    $sudo_cmd env DEBIAN_FRONTEND=noninteractive apt-get install -y nano ;;
+        dnf)    $sudo_cmd dnf install -y nano ;;
+        pacman) $sudo_cmd pacman -S --noconfirm nano ;;
+        apk)    $sudo_cmd apk add nano ;;
+        zypper) $sudo_cmd zypper install -y nano ;;
+    esac
+}
+
+# Find a usable GNU nano on PATH, or explain precisely why there isn't one.
+resolve_nano() {
+    local bin version
+    bin="$(command -v nano 2>/dev/null)" || {
+        log_err "nano is not on PATH."
+        return 1
+    }
+
+    if ! version="$(nano_version "$bin")"; then
+        log_err "'$bin' is not GNU nano."
+        if [[ "$(uname -s)" == "Darwin" && "$bin" == "/usr/bin/nano" ]]; then
+            log_err "On macOS, /usr/bin/nano is UW pico — a different editor that
+has no syntax highlighting and none of the settings this script writes.
+GNU nano is installed, but your PATH still finds /usr/bin first.
+Put your Homebrew prefix ahead of /usr/bin in your shell config, open a
+new terminal, and run this script again."
+        fi
+        return 1
+    fi
+
+    if ! version_at_least "$version" "$MIN_NANO_VERSION"; then
+        log_err "Found GNU nano $version, but this config needs $MIN_NANO_VERSION or newer.
+Upgrade nano and run this script again."
+        return 1
+    fi
+
+    printf '%s\n' "$bin"
+}
+
+# ---------------------------------------------------------------------------
 main() {
     parse_args "$@"
     log_ok "skeleton only"
