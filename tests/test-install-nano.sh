@@ -1113,6 +1113,13 @@ test_sync_syntax_pack
 echo
 echo "== end to end =="
 
+# QOL_NANO_NO_INSTALL is set in every end-to-end invocation below, even the
+# ones that expect nano to already be on PATH via make_stub_nano and so
+# should never reach install_nano_package at all. Belt and suspenders: if a
+# bug ever did let one of these fall through, this seam is what stops it
+# from running a real package manager against this machine instead of just
+# quietly (and wrongly) passing.
+
 test_dry_run_writes_nothing() {
     local tmp; tmp="$(mktemp -d)"
     make_stub_nano "$tmp/bin" "9.1"
@@ -1121,8 +1128,12 @@ test_dry_run_writes_nothing() {
     local saved_path="$PATH"
     PATH="$tmp/bin:$saved_path"
 
-    HOME="$tmp/home" ./install_nano.sh --dry-run --yes >/dev/null 2>&1
+    local rc
+    QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --dry-run --yes >/dev/null 2>&1
+    rc=$?
 
+    assert_eq "0" "$rc" "--dry-run exits 0"
     assert_fail "[ -f '$tmp/home/.nanorc' ]" "--dry-run writes no .nanorc"
     assert_fail "[ -d '$tmp/home/.nano' ]"   "--dry-run clones nothing"
 
@@ -1138,8 +1149,12 @@ test_real_run_writes_config() {
     local saved_path="$PATH"
     PATH="$tmp/bin:$saved_path"
 
-    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax >/dev/null 2>&1
+    local rc
+    QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --yes --no-syntax >/dev/null 2>&1
+    rc=$?
 
+    assert_eq "0" "$rc" "real run exits 0"
     assert_ok "[ -f '$tmp/home/.nanorc' ]" "real run writes .nanorc"
     assert_contains "$(cat "$tmp/home/.nanorc")" "set linenumbers" \
         "written .nanorc carries the core settings"
@@ -1150,6 +1165,11 @@ test_real_run_writes_config() {
     rm -rf "$tmp"
 }
 
+# $SHELL is pinned explicitly on every invocation here rather than left to
+# whatever shell happens to be running the test suite. This test previously
+# passed only because this development machine's own $SHELL is zsh — on a
+# bash-login host every assertion below would have failed silently, since
+# set_default_editor would have written to a completely different file.
 test_set_editor_is_opt_in() {
     local tmp; tmp="$(mktemp -d)"
     make_stub_nano "$tmp/bin" "9.1"
@@ -1159,20 +1179,69 @@ test_set_editor_is_opt_in() {
     local saved_path="$PATH"
     PATH="$tmp/bin:$saved_path"
 
-    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax >/dev/null 2>&1
+    local rc
+    SHELL=/bin/zsh QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --yes --no-syntax >/dev/null 2>&1
+    rc=$?
+    assert_eq "0" "$rc" "run without --set-editor exits 0"
     assert_not_contains "$(cat "$tmp/home/.zshrc")" "EDITOR" \
         "EDITOR is not exported by default"
 
-    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    SHELL=/bin/zsh QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    rc=$?
+    assert_eq "0" "$rc" "--set-editor exits 0"
     assert_contains "$(cat "$tmp/home/.zshrc")" "export EDITOR=nano" \
         "--set-editor exports EDITOR"
     assert_contains "$(cat "$tmp/home/.zshrc")" "export VISUAL=nano" \
         "--set-editor exports VISUAL"
 
     # Idempotent: a second --set-editor run must not duplicate.
-    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    SHELL=/bin/zsh QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    rc=$?
+    assert_eq "0" "$rc" "rerun of --set-editor exits 0"
     assert_eq "1" "$(grep -c 'export EDITOR=nano' "$tmp/home/.zshrc")" \
         "--set-editor does not duplicate on rerun"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+# On macOS, Terminal.app starts a login shell, which reads .bash_profile,
+# not .bashrc — a .bashrc-only write left --set-editor with no visible
+# effect there. set_default_editor now writes the same idempotent block to
+# both files for bash. Both start pre-existing here (a fresh install with
+# neither present is covered implicitly: touch creates them).
+test_set_editor_bash_login() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+    touch "$tmp/home/.bash_profile" "$tmp/home/.bashrc"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local rc
+    SHELL=/bin/bash QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    rc=$?
+
+    assert_eq "0" "$rc" "bash --set-editor exits 0"
+    assert_contains "$(cat "$tmp/home/.bash_profile")" "export EDITOR=nano" \
+        "bash: .bash_profile (the login-shell file Terminal.app reads) gets EDITOR"
+    assert_contains "$(cat "$tmp/home/.bash_profile")" "export VISUAL=nano" \
+        "bash: .bash_profile gets VISUAL"
+    assert_contains "$(cat "$tmp/home/.bashrc")" "export EDITOR=nano" \
+        "bash: .bashrc (the non-login interactive file) also gets EDITOR"
+
+    # Idempotent per file too.
+    SHELL=/bin/bash QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    assert_eq "1" "$(grep -c 'export EDITOR=nano' "$tmp/home/.bash_profile")" \
+        "bash: .bash_profile does not duplicate on rerun"
+    assert_eq "1" "$(grep -c 'export EDITOR=nano' "$tmp/home/.bashrc")" \
+        "bash: .bashrc does not duplicate on rerun"
 
     PATH="$saved_path"
     rm -rf "$tmp"
@@ -1181,6 +1250,203 @@ test_set_editor_is_opt_in() {
 test_dry_run_writes_nothing
 test_real_run_writes_config
 test_set_editor_is_opt_in
+test_set_editor_bash_login
+
+echo
+echo "== main: pico vs genuinely-absent nano =="
+
+# The critical bug this section guards against: main() used to run
+# `resolve_nano 2>/dev/null` and treat every failure identically, so a
+# pico-on-PATH student (the single most common Apple Silicon breakage —
+# Homebrew installed, but its shellenv line missing from the rc, so `brew`
+# itself isn't even on PATH) fell all the way through to
+# install_nano_package and saw "No supported package manager found" instead
+# of the specific, branded pico diagnostic that pico_diagnostic exists to
+# produce. resolve_nano now returns 2 (not 1) for "found something, but
+# it's not usable," and main() must never call install_nano_package for
+# that case.
+test_main_pico_no_install_attempt() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_pico "$tmp/bin"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local out rc
+    out="$(QOL_NANO_NO_INSTALL=1 QOL_NANO_PICO_PATH="$tmp/bin/nano" \
+           QOL_NANO_UNAME="Darwin" QOL_NANO_BREW_PREFIXES="$tmp/nobrew" \
+           HOME="$tmp/home" ./install_nano.sh --yes --no-syntax </dev/null 2>&1)"
+    rc=$?
+
+    assert_eq "1" "$rc" "pico on PATH: script exits 1"
+    assert_contains "$out" "UW pico" "pico on PATH: prints the branded diagnostic"
+    assert_not_contains "$out" "QOL_NANO_NO_INSTALL" \
+        "pico on PATH: install_nano_package is never called"
+    assert_not_contains "$out" "No supported package manager found" \
+        "pico on PATH: never falls through to the generic install-failure message"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+# The other half of the same fix: a genuinely absent nano (rc 1, not 2)
+# must still reach install_nano_package. PATH is fully replaced, not
+# prepended — this dev machine has a real Homebrew nano on it, and a
+# prepend would let a regressed "no nano found" detection silently pass by
+# falling through to that real binary instead of proving the "absent"
+# path was actually exercised.
+test_main_absent_nano_reaches_install() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/home" "$tmp/toolbox"
+    # Only what's needed to exec the script's own #!/usr/bin/env bash
+    # shebang under a fully replaced PATH; everything else on the path to
+    # the QOL_NANO_NO_INSTALL seam firing is bash builtins.
+    ln -s "$(command -v env)" "$tmp/toolbox/env"
+    ln -s "$(command -v bash)" "$tmp/toolbox/bash"
+
+    local saved_path="$PATH"
+    # shellcheck disable=SC2123
+    PATH="$tmp/toolbox"
+
+    local out rc
+    out="$(QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+           ./install_nano.sh --yes --no-syntax </dev/null 2>&1)"
+    rc=$?
+
+    assert_eq "1" "$rc" "genuinely-absent nano: exits 1 (blocked by the install seam)"
+    assert_contains "$out" "QOL_NANO_NO_INSTALL" \
+        "genuinely-absent nano: install_nano_package is actually reached"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_main_pico_no_install_attempt
+test_main_absent_nano_reaches_install
+
+echo
+echo "== confirm() =="
+
+test_confirm() {
+    local saved_yes="$ASSUME_YES"
+    ASSUME_YES=""
+
+    assert_ok "printf 'y\n' | QOL_NANO_FORCE_TTY=1 confirm 'proceed?' 2>/dev/null" \
+        "forced-tty prompt: explicit 'y' proceeds"
+    assert_ok "printf 'yes\n' | QOL_NANO_FORCE_TTY=1 confirm 'proceed?' 2>/dev/null" \
+        "forced-tty prompt: explicit 'yes' proceeds"
+    assert_fail "printf 'n\n' | QOL_NANO_FORCE_TTY=1 confirm 'proceed?' 2>/dev/null" \
+        "forced-tty prompt: explicit 'n' declines"
+    assert_fail "printf '\n' | QOL_NANO_FORCE_TTY=1 confirm 'proceed?' 2>/dev/null" \
+        "forced-tty prompt: empty reply defaults to decline"
+    assert_fail "printf 'sure\n' | QOL_NANO_FORCE_TTY=1 confirm 'proceed?' 2>/dev/null" \
+        "forced-tty prompt: anything but y/yes declines"
+
+    ASSUME_YES=1
+    assert_ok "confirm 'proceed?' </dev/null 2>/dev/null" \
+        "--yes skips the prompt entirely and proceeds"
+    assert_ok "printf 'n\n' | QOL_NANO_FORCE_TTY=1 confirm 'proceed?' 2>/dev/null" \
+        "--yes overrides the force-tty seam too"
+
+    ASSUME_YES="$saved_yes"
+}
+
+test_confirm
+
+# Function-level coverage above proves confirm()'s own contract. These four
+# prove main() actually wires it in: a shown prompt, an accepted prompt, a
+# declined prompt, and the plain non-tty default (no seam, no --yes) that
+# every other end-to-end test in this suite has been relying on all along
+# without ever checking it directly.
+
+test_confirm_shown_and_accepted() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local out rc
+    out="$(printf 'y\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 \
+           HOME="$tmp/home" ./install_nano.sh --no-syntax 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "accepting the prompt exits 0"
+    assert_contains "$out" "[y/N]" "the prompt is actually shown under the force-tty seam"
+    assert_ok "[ -f '$tmp/home/.nanorc' ]" "accepting the prompt writes .nanorc"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_confirm_declined_skips_write() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local rc
+    printf 'n\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 \
+        HOME="$tmp/home" ./install_nano.sh --no-syntax >/dev/null 2>&1
+    rc=$?
+
+    assert_eq "0" "$rc" "declining the prompt is not an error"
+    assert_fail "[ -f '$tmp/home/.nanorc' ]" "declining the prompt writes no .nanorc"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_confirm_non_tty_proceeds_without_yes() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local rc
+    QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --no-syntax </dev/null >/dev/null 2>&1
+    rc=$?
+
+    assert_eq "0" "$rc" "no --yes, non-tty stdin: still exits 0"
+    assert_ok "[ -f '$tmp/home/.nanorc' ]" \
+        "no --yes, non-tty stdin: still writes .nanorc (the automation default)"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_dry_run_never_prompts() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local out rc
+    out="$(QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 HOME="$tmp/home" \
+           ./install_nano.sh --dry-run --set-editor </dev/null 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "--dry-run with the force-tty seam still exits 0"
+    assert_not_contains "$out" "[y/N]" \
+        "--dry-run never shows a confirmation prompt, even under the force-tty seam"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_confirm_shown_and_accepted
+test_confirm_declined_skips_write
+test_confirm_non_tty_proceeds_without_yes
+test_dry_run_never_prompts
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

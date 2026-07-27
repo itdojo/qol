@@ -439,7 +439,13 @@ backup_file() {
     local f="$1" backup
     [[ -f "$f" ]] || return 0
     backup="$f.pre-nano.$(date +%Y%m%d-%H%M%S).bak"
-    cp "$f" "$backup"
+    # `cp` was previously a bare statement followed unconditionally by
+    # log_info — log_info always succeeds, so it masked a failed copy behind
+    # a "Backed up" message that never happened. Check it explicitly.
+    if ! cp "$f" "$backup"; then
+        log_err "Could not back up $f to $backup."
+        return 1
+    fi
     log_info "Backed up $f → $backup"
 }
 
@@ -485,16 +491,40 @@ replace_file_contents() {
         return 1
     }
 
-    cat "$src" > "$tmp" || { rm -f "$tmp"; return 1; }
-    chmod "$mode" "$tmp"
-    mv "$tmp" "$target"
+    cat "$src" > "$tmp" || {
+        rm -f "$tmp"
+        log_err "Could not write a replacement for $target."
+        return 1
+    }
+    chmod "$mode" "$tmp" || {
+        rm -f "$tmp"
+        log_err "Could not set permissions on the replacement for $target."
+        return 1
+    }
+    # -f, not a bare `mv`: GNU mv prompts for confirmation before overwriting
+    # a file whose own permission bits are read-only, even when the caller
+    # owns it and the containing directory is writable (rename() only cares
+    # about the latter). Unanswerable in a non-interactive script, that
+    # prompt reads stdin, gets EOF, and mv exits non-zero — which previously
+    # surfaced as a bare, unexplained "mv: ..." message right before the
+    # whole script died under set -e. -f skips the prompt; a genuine
+    # permission problem (unwritable directory) still fails, and now it is
+    # caught here with a clear message instead.
+    if ! mv -f "$tmp" "$target"; then
+        rm -f "$tmp"
+        log_err "Could not replace $target (permission denied?)."
+        return 1
+    fi
     rm -f "$src"
 }
 
 remove_managed_block() {
     local file="$1" tmp
     grep -qF "$BLOCK_START" "$file" || return 0
-    tmp="$(mktemp)"
+    tmp="$(mktemp)" || {
+        log_err "Could not create a temporary file to update $file."
+        return 1
+    }
     awk -v s="$BLOCK_START" -v e="$BLOCK_END" '
         index($0, s) { skip = 1 }
         !skip { print }
@@ -505,15 +535,31 @@ remove_managed_block() {
 
 write_nanorc() {
     log_step "Writing $NANORC..."
-    [[ -f "$NANORC" ]] || touch "$NANORC"
+
+    # Every step below that touches the filesystem is checked explicitly and
+    # returns 1 with a ❌ line of its own on failure, rather than leaving a
+    # bare command to fail and let `set -e` kill the whole script mid-write
+    # with nothing but a raw tool error (e.g. `touch: No such file or
+    # directory` for a dangling symlink, or a stray .bak with no explanation
+    # of what happened next). main() wraps this call in `|| exit 1`, exactly
+    # like install_nano_package and resolve_nano.
+    if [[ ! -f "$NANORC" ]]; then
+        if ! touch "$NANORC"; then
+            log_err "Could not create $NANORC (dangling symlink to a missing directory?)."
+            return 1
+        fi
+    fi
 
     # Only back up a file we have not managed before. Backing up on every rerun
     # would litter the home directory with near-identical copies.
     if ! grep -qF "$BLOCK_START" "$NANORC" && [[ -s "$NANORC" ]]; then
-        backup_file "$NANORC"
+        backup_file "$NANORC" || return 1
     fi
 
-    remove_managed_block "$NANORC"
+    remove_managed_block "$NANORC" || {
+        log_err "Could not update $NANORC while removing its previous qol block."
+        return 1
+    }
 
     # Strip trailing blank lines left behind by block removal. Without this,
     # every rerun would add one more blank line above the block and the
@@ -525,16 +571,26 @@ write_nanorc() {
     # non-blank one, then prints up to that index. A simpler `NF { print }`
     # would drop every blank line in the file, including the user's own
     # interior spacing — not just the trailing run left by block removal.
-    local tmp; tmp="$(mktemp)"
+    local tmp
+    tmp="$(mktemp)" || {
+        log_err "Could not create a temporary file to rewrite $NANORC."
+        return 1
+    }
     awk '{ lines[NR] = $0 }
          END {
              last = 0
              for (i = 1; i <= NR; i++) if (lines[i] ~ /[^[:space:]]/) last = i
              for (i = 1; i <= last; i++) print lines[i]
          }' "$NANORC" > "$tmp"
-    replace_file_contents "$tmp" "$NANORC"
+    replace_file_contents "$tmp" "$NANORC" || {
+        log_err "Could not update $NANORC while trimming trailing blank lines."
+        return 1
+    }
 
-    render_nanorc >> "$NANORC"
+    render_nanorc >> "$NANORC" || {
+        log_err "Could not append the qol block to $NANORC."
+        return 1
+    }
     log_ok "Wrote the qol block to $NANORC"
 }
 
@@ -568,6 +624,17 @@ pkg_install_cmd() {
 }
 
 install_nano_package() {
+    # QOL_NANO_NO_INSTALL is a test seam. main() must never let the suite
+    # reach a real package manager — the stub nano in a fixture PATH usually
+    # keeps resolve_nano from ever calling this, but a bug in that guard
+    # would otherwise fall through to a genuine `apt-get install` or `brew
+    # install` on whatever machine runs the tests. Set unconditionally in
+    # every end-to-end test rather than relied on incidentally.
+    if [[ -n "${QOL_NANO_NO_INSTALL:-}" ]]; then
+        log_err "install_nano_package blocked by QOL_NANO_NO_INSTALL (test seam); refusing to touch a real package manager."
+        return 1
+    fi
+
     local mgr
     mgr="$(detect_pkg_manager)" || {
         log_err "No supported package manager found (brew, apt-get, dnf, pacman, apk, zypper)."
@@ -665,6 +732,15 @@ Run this script normally (without overriding PATH) to install it."
 }
 
 # Find a usable GNU nano on PATH, or explain precisely why there isn't one.
+#
+# Exit status distinguishes two different situations a caller needs to react
+# to differently:
+#   1 — nothing answers to `nano` at all. Installing is the right next step.
+#   2 — something answers to `nano`, but it is not usable (pico, some other
+#       non-GNU nano, or a GNU nano too old for MIN_NANO_VERSION). A specific
+#       diagnostic has already been printed, and running the installer would
+#       not fix what it describes — on macOS in particular, `brew install
+#       nano` does not change what `/usr/bin/nano` resolves to on PATH.
 resolve_nano() {
     local bin version
     bin="$(command -v nano 2>/dev/null)" || {
@@ -683,13 +759,13 @@ resolve_nano() {
         else
             log_err "'$bin' is not GNU nano."
         fi
-        return 1
+        return 2
     fi
 
     if ! version_at_least "$version" "$MIN_NANO_VERSION"; then
         log_err "Found GNU nano $version, but this config needs $MIN_NANO_VERSION or newer.
 Upgrade nano and run this script again."
-        return 1
+        return 2
     fi
 
     printf '%s\n' "$bin"
@@ -705,38 +781,139 @@ EDITOR_BLOCK_START="# >>> qol nano editor >>>"
 EDITOR_BLOCK_END="# <<< qol nano editor <<<"
 
 set_default_editor() {
-    local rc
-    case "$(basename "${SHELL:-/bin/bash}")" in
-        zsh)  rc="$HOME/.zshrc" ;;
-        bash) rc="$HOME/.bashrc" ;;
-        *)    log_warn "Unrecognised shell ${SHELL:-unset}; not setting EDITOR."
-              return 0 ;;
+    local shell_name rcs
+    shell_name="$(basename "${SHELL:-/bin/bash}")"
+    case "$shell_name" in
+        zsh)
+            rcs="$HOME/.zshrc"
+            ;;
+        bash)
+            # Both, not just .bashrc: on macOS, Terminal.app (and any other
+            # login shell) reads .bash_profile, not .bashrc, and a plain
+            # .bashrc-only write left --set-editor with no effect there. A
+            # non-login interactive shell (many Linux terminal emulators)
+            # reads .bashrc instead. Writing the same idempotent block to
+            # both covers whichever one actually gets sourced; if a user's
+            # .bash_profile already sources .bashrc, the second export is
+            # harmless.
+            rcs="$HOME/.bash_profile
+$HOME/.bashrc"
+            ;;
+        *)
+            log_warn "Unrecognised shell ${SHELL:-unset}; not setting EDITOR.
+Add these lines to your shell's startup file yourself:
+  export EDITOR=nano
+  export VISUAL=nano"
+            return 0
+            ;;
     esac
 
     if [[ -n "$DRY_RUN" ]]; then
-        log_info "[dry-run] would export EDITOR=nano and VISUAL=nano in $rc"
+        log_info "[dry-run] would export EDITOR=nano and VISUAL=nano in:"
+        while IFS= read -r rc; do
+            [[ -n "$rc" ]] && style_text "  $rc"
+        done <<EOF
+$rcs
+EOF
         return 0
     fi
 
-    [[ -f "$rc" ]] || touch "$rc"
+    local rc
+    while IFS= read -r rc; do
+        [[ -n "$rc" ]] || continue
 
-    # Reuse the block-removal logic against this block's own markers.
-    local saved_start="$BLOCK_START" saved_end="$BLOCK_END"
-    BLOCK_START="$EDITOR_BLOCK_START"
-    BLOCK_END="$EDITOR_BLOCK_END"
-    remove_managed_block "$rc"
-    BLOCK_START="$saved_start"
-    BLOCK_END="$saved_end"
+        if [[ ! -f "$rc" ]]; then
+            if ! touch "$rc"; then
+                log_err "Could not create $rc (dangling symlink to a missing directory?)."
+                return 1
+            fi
+        fi
 
-    cat >> "$rc" <<EOF
+        # Only back up a file we have not managed before, same rule as
+        # write_nanorc — this is the more valuable of the two files (it is
+        # someone's whole shell startup, not just their editor config), so
+        # it does not get skipped just because it's the second file this
+        # script touches.
+        if ! grep -qF "$EDITOR_BLOCK_START" "$rc" && [[ -s "$rc" ]]; then
+            backup_file "$rc" || return 1
+        fi
+
+        # Reuse the block-removal logic against this block's own markers.
+        # remove_managed_block is called via `|| remove_rc=$?`, not bare —
+        # a bare call that fails would trigger `set -e` immediately and skip
+        # right past the BLOCK_START/BLOCK_END restore below it, leaving the
+        # globals pointed at the editor block's markers for whatever runs
+        # next.
+        local saved_start="$BLOCK_START" saved_end="$BLOCK_END"
+        BLOCK_START="$EDITOR_BLOCK_START"
+        BLOCK_END="$EDITOR_BLOCK_END"
+        local remove_rc=0
+        remove_managed_block "$rc" || remove_rc=$?
+        BLOCK_START="$saved_start"
+        BLOCK_END="$saved_end"
+        if [[ "$remove_rc" -ne 0 ]]; then
+            log_err "Could not update $rc while removing its previous EDITOR block."
+            return 1
+        fi
+
+        if ! cat >> "$rc" <<EOF
 $EDITOR_BLOCK_START
 # Managed by install_nano.sh — rewritten on every rerun.
-# Put your own settings OUTSIDE the markers; anything inside is disposable.
+# Put your own settings ABOVE this block, not below it: the block is always
+# re-appended at the end of the file, so anything you add below it today
+# ends up above it after the next run.
 export EDITOR=nano
 export VISUAL=nano
 $EDITOR_BLOCK_END
 EOF
-    log_ok "Set nano as the default editor in $rc"
+        then
+            log_err "Could not write to $rc (permission denied?)."
+            return 1
+        fi
+        log_ok "Set nano as the default editor in $rc"
+    done <<EOF
+$rcs
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# Confirmation
+# ---------------------------------------------------------------------------
+# Ask before a state-changing step. Three rules, in priority order:
+#   1. --yes (ASSUME_YES) skips the prompt entirely and proceeds.
+#   2. A non-tty stdin (piped, redirected, cron, this test suite) skips the
+#      prompt too and proceeds — prompting into a black hole would just hang
+#      forever, and that is the automation case this flag family exists for.
+#   3. Otherwise a real prompt is shown; an empty reply (bare Enter) or
+#      anything but an explicit yes defaults to declining, not proceeding.
+#
+# Callers never see --dry-run here: main() only calls confirm() from the
+# branch that runs after the dry-run early exit, so a dry run never prompts.
+#
+# QOL_NANO_FORCE_TTY is a test seam: it lets the suite exercise the real
+# prompt-and-read path by feeding input through a pipe, which is never a
+# tty on its own, without needing an actual pty.
+confirm() {
+    local prompt="$1"
+    [[ -n "$ASSUME_YES" ]] && return 0
+
+    if [[ -z "${QOL_NANO_FORCE_TTY:-}" ]] && [[ ! -t 0 ]]; then
+        return 0
+    fi
+
+    # A plain `read -p` was tried first and dropped: bash's own -p suppresses
+    # the prompt entirely whenever it decides stdin isn't a real terminal —
+    # which defeats QOL_NANO_FORCE_TTY, since that seam controls our own
+    # branch above but not bash's internal read -p heuristic. Printing the
+    # prompt ourselves means it appears exactly when this function decided
+    # to ask, on a real tty or a forced one alike.
+    local answer=""
+    printf '%s [y/N]: ' "$prompt" >&2
+    read -r answer
+    case "$answer" in
+        [Yy]|[Yy][Ee][Ss]) return 0 ;;
+        *)                 return 1 ;;
+    esac
 }
 
 # ---------------------------------------------------------------------------
@@ -747,8 +924,23 @@ main() {
     log_step "nano setup"
     [[ -n "$DRY_RUN" ]] && log_info "Dry run — nothing will be written."
 
-    local bin
-    if ! bin="$(resolve_nano 2>/dev/null)"; then
+    # resolve_nano's exit status distinguishes "nothing found, install it"
+    # (1) from "found something, but it's not usable and installing will not
+    # help" (2 — pico, some other non-GNU nano, or too old). The pico case is
+    # the single most likely failure a macOS student hits, and it used to be
+    # buried: `resolve_nano 2>/dev/null` discarded pico_diagnostic's specific
+    # message, and a bare `if ! bin=...; then install_nano_package` treated
+    # both cases identically, so a pico-on-PATH student with no package
+    # manager reachable saw "No supported package manager found" instead of
+    # being told GNU nano is already installed at $brew_nano, or that it
+    # needs to be installed with PATH left alone. Stderr is no longer
+    # redirected, and the two cases are handled separately.
+    local bin rc=0
+    bin="$(resolve_nano)" || rc=$?
+    if [[ "$rc" -eq 2 ]]; then
+        exit 1
+    fi
+    if [[ "$rc" -ne 0 ]]; then
         install_nano_package || exit 1
         if [[ -n "$DRY_RUN" ]]; then
             log_info "[dry-run] stopping here; nano is not actually installed."
@@ -774,15 +966,43 @@ main() {
     if [[ -n "$DRY_RUN" ]]; then
         log_info "[dry-run] would write this block to $NANORC:"
         render_nanorc
+        [[ -n "$SET_EDITOR" ]] && set_default_editor
         exit 0
     fi
 
-    write_nanorc
-    [[ -n "$SET_EDITOR" ]] && set_default_editor
+    if confirm "Write the qol block to $NANORC?"; then
+        # write_nanorc, like install_nano_package and resolve_nano, gives its
+        # own callers a meaningful non-zero return with a ❌ line already
+        # printed on every failure path (dangling symlink, permission
+        # denied, disk full) rather than letting a bare internal command
+        # fail and take the whole script down under set -e with nothing but
+        # a raw tool error.
+        write_nanorc || exit 1
+    else
+        log_warn "Skipped writing $NANORC at your request."
+    fi
+
+    if [[ -n "$SET_EDITOR" ]]; then
+        if confirm "Export EDITOR=nano and VISUAL=nano in your shell rc?"; then
+            set_default_editor || exit 1
+        else
+            log_warn "Skipped setting EDITOR/VISUAL at your request."
+        fi
+    fi
 
     echo
+    local syntax_line
+    if [[ -d "$SYNTAX_DIR" ]]; then
+        syntax_line="Syntax:      $SYNTAX_DIR (community) + the definitions shipped with nano"
+    else
+        # Covers both --no-syntax and a clone that never happened (no git,
+        # or a failed clone) — printing a path that doesn't exist would be
+        # its own small trust-eroding bug, same spirit as never warning
+        # about a syntax include that matches nothing.
+        syntax_line="Syntax:      the definitions shipped with nano (no community pack)"
+    fi
     format_font "Config:      $NANORC
-Syntax:      $SYNTAX_DIR (community) + the definitions shipped with nano
+$syntax_line
 Cheat sheet: $SCRIPT_DIR/docs/nano-cheatsheet.html
 ^S saves. ^X exits. M-U undoes, M-E redoes." normal blue
     format_font "nano is ready. Open a new file to see it." bold green
