@@ -275,21 +275,21 @@ syntax_include_globs() {
 
     # Shipped packs last — they win ties.
     #
-    # Split on newlines only. An unscoped split would also break on spaces,
-    # silently discarding any prefix whose path contains one — the directory
-    # would simply never appear in the output, and the user would see missing
-    # highlighting with nothing explaining it.
-    local old_ifs="$IFS"
-    IFS=$'\n'
-    # shellcheck disable=SC2086  # deliberate word-splitting, scoped to newlines by IFS above
-    for dir in $prefixes; do
+    # Iterate with `read` rather than `for dir in $prefixes`. Word-splitting an
+    # unquoted expansion is a bash behaviour; zsh leaves it unsplit, so the
+    # whole newline-separated list arrived as a single path and the function
+    # silently emitted nothing when sourced into a zsh shell. A read loop
+    # behaves identically under both.
+    while IFS= read -r dir; do
+        [[ -n "$dir" ]] || continue
         [[ -d "$dir" ]] || continue
         printf '%s/*.nanorc\n' "$dir"
         if [[ -d "$dir/extra" ]]; then
             printf '%s/extra/*.nanorc\n' "$dir"
         fi
-    done
-    IFS="$old_ifs"
+    done <<EOF
+$prefixes
+EOF
 }
 
 # ---------------------------------------------------------------------------

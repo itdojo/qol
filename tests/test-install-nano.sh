@@ -332,6 +332,38 @@ $tmp/deb/nano-syntax-highlighting/*.nanorc" "$out" \
 
 test_syntax_include_globs
 
+# This suite otherwise runs under bash only, which is exactly how the
+# word-splitting bug survived: `for dir in $prefixes` relies on bash's
+# unquoted-expansion word-splitting, but zsh leaves an unquoted expansion
+# unsplit even with IFS set, so the whole newline-separated prefix list
+# arrived as one unmatched path and the function silently emitted nothing
+# when this script was sourced into a zsh shell — exactly what the plan's
+# own verification steps (and this machine's zsh login shell) do. Shell out
+# to a real zsh and prove both prefixes still come back split.
+test_syntax_include_globs_zsh() {
+    if ! command -v zsh >/dev/null 2>&1; then
+        printf '  skip syntax_include_globs splits correctly under zsh (no zsh on PATH)\n'
+        return 0
+    fi
+
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/a" "$tmp/b"
+    touch "$tmp/a/one.nanorc" "$tmp/b/two.nanorc"
+
+    local out
+    out="$(SYNTAX_DIR="$tmp/absent" QOL_NANO_PREFIXES="$tmp/a
+$tmp/b" zsh -c "source '$SCRIPT_UNDER_TEST'; syntax_include_globs" 2>&1)"
+
+    assert_contains "$out" "$tmp/a/*.nanorc" \
+        "zsh: first prefix glob present"
+    assert_contains "$out" "$tmp/b/*.nanorc" \
+        "zsh: second prefix glob present"
+
+    rm -rf "$tmp"
+}
+
+test_syntax_include_globs_zsh
+
 echo
 echo "== nanorc rendering =="
 
