@@ -209,6 +209,24 @@ nano_version() {
     printf '%s\n' "$version"
 }
 
+# `nano --help` lists the long-option form of every rc directive that this
+# particular binary was compiled with. Several are wrapped in #ifdef in
+# src/nano.c, so a distro build configured with --enable-tiny omits them
+# regardless of its version number. Probing --help is therefore exact where a
+# version table would be wrong.
+nano_help_cache=""
+
+load_nano_help() {
+    local bin="$1"
+    nano_help_cache="$(TERM=dumb "$bin" --help </dev/null 2>&1 || true)"
+}
+
+# Match on the whole option token so that `line` cannot match `--linenumbers`.
+# The option is always followed by a comma, an equals sign, or whitespace.
+nano_supports() {
+    printf '%s\n' "$nano_help_cache" | grep -qE -- "--$1([,= ]|\$)"
+}
+
 # ---------------------------------------------------------------------------
 main() {
     parse_args "$@"

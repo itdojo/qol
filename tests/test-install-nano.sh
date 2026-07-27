@@ -186,5 +186,45 @@ STUB
 
 test_nano_version
 
+echo
+echo "== capability probe =="
+
+test_capability_probe() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/full" "9.1"
+
+    # A --enable-tiny build: modern version number, but the gated options are
+    # compiled out. This is why we probe --help instead of comparing versions.
+    mkdir -p "$tmp/tiny"
+    cat > "$tmp/tiny/nano" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+    --version) printf ' GNU nano, version 8.0\n'; exit 0 ;;
+    --help)    printf ' -l, --linenumbers\n'; exit 0 ;;
+esac
+exit 1
+STUB
+    chmod +x "$tmp/tiny/nano"
+
+    load_nano_help "$tmp/full/nano"
+    assert_ok 'nano_supports linenumbers' "full build supports linenumbers"
+    assert_ok 'nano_supports indicator'   "full build supports indicator"
+    assert_ok 'nano_supports stateflags'  "full build supports stateflags"
+    assert_fail 'nano_supports zero'      "stub does not advertise zero"
+
+    load_nano_help "$tmp/tiny/nano"
+    assert_ok   'nano_supports linenumbers' "tiny build supports linenumbers"
+    assert_fail 'nano_supports indicator'   "tiny build lacks indicator despite 8.0"
+    assert_fail 'nano_supports stateflags'  "tiny build lacks stateflags despite 8.0"
+
+    # A substring must not produce a false positive: --line must not match
+    # --linenumbers.
+    assert_fail 'nano_supports line' "partial option name does not match"
+
+    rm -rf "$tmp"
+}
+
+test_capability_probe
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
