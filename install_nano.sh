@@ -389,11 +389,14 @@ backup_file() {
 # target closes that window: the rename either happens or it doesn't.
 #
 # Two details are load-bearing. The temp file is created in the DESTINATION's
-# directory, not $TMPDIR, because a rename is only atomic within one
-# filesystem and on macOS $TMPDIR is a different APFS volume from $HOME. And
-# symlinks are resolved first, because renaming onto a symlink replaces the
-# link with a regular file — which would quietly detach a ~/.nanorc that a
-# user has symlinked into a dotfiles repo.
+# directory, not $TMPDIR, because a rename is only atomic within a single
+# filesystem, and $TMPDIR is not guaranteed to share one with $HOME — a tmpfs
+# /tmp on Linux, or a user-set TMPDIR, would silently turn the rename into a
+# copy instead. And symlinks are resolved first, because renaming onto a
+# symlink replaces the link with a regular file — which would quietly detach
+# a ~/.nanorc that a user has symlinked into a dotfiles repo. That second
+# reason holds regardless of filesystem layout and is why the destination
+# directory is the right place for the temp file either way.
 #
 # What survives is the path, the mode, and the symlink if there is one — not
 # the inode: the atomic rename necessarily replaces it.
