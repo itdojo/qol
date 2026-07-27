@@ -1324,6 +1324,57 @@ test_dry_run_writes_nothing() {
     assert_fail "[ -f '$tmp/home/.nanorc' ]" "--dry-run writes no .nanorc"
     assert_fail "[ -d '$tmp/home/.nano' ]"   "--dry-run clones nothing"
 
+    # --set-editor is the second file this script can write, and it has its
+    # own dry-run guard inside set_default_editor. Without this case, deleting
+    # that guard wrote a real EDITOR block into ~/.zshrc and the suite stayed
+    # green — the only other test that combines --dry-run with --set-editor
+    # checks for a prompt, not for a write. $SHELL is pinned so the assertion
+    # names the file this run would actually have touched.
+    local out
+    out="$(SHELL=/bin/zsh QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+        ./install_nano.sh --dry-run --yes --set-editor 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "--dry-run --set-editor exits 0"
+    assert_fail "[ -e '$tmp/home/.zshrc' ]" \
+        "--dry-run --set-editor does not even create the shell rc"
+    assert_fail "[ -f '$tmp/home/.nanorc' ]" \
+        "--dry-run --set-editor still writes no .nanorc"
+    assert_contains "$out" "[dry-run] would export EDITOR=nano" \
+        "--dry-run --set-editor says what it would have done"
+    assert_contains "$out" "$tmp/home/.zshrc" \
+        "--dry-run --set-editor names the rc file it would have written"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+# main() calls `write_nanorc || exit 1`. Mutating that to `|| true` went
+# completely undetected: every other end-to-end test uses a home directory
+# where the write succeeds, so nothing ever exercised the failure path's exit
+# status. A dangling symlink is the cleanest forced failure — it makes
+# write_nanorc's own `touch` fail regardless of who is running the suite,
+# where a chmod-based fixture would be a no-op under root (as in a container).
+test_write_nanorc_failure_exits_nonzero() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+    ln -s "$tmp/home/no-such-dir/nanorc" "$tmp/home/.nanorc"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local out rc
+    out="$(QOL_NANO_NO_INSTALL=1 HOME="$tmp/home" \
+           ./install_nano.sh --yes --no-syntax </dev/null 2>&1)"
+    rc=$?
+
+    assert_eq "1" "$rc" "a failed write_nanorc takes the whole script down with exit 1"
+    assert_contains "$out" "Could not create $tmp/home/.nanorc" \
+        "the failure is reported with a branded message, not a raw tool error"
+    assert_not_contains "$out" "nano is ready" \
+        "a failed write never reports success"
+
     PATH="$saved_path"
     rm -rf "$tmp"
 }
@@ -1534,6 +1585,7 @@ test_write_nanorc_no_trailing_newline() {
 }
 
 test_dry_run_writes_nothing
+test_write_nanorc_failure_exits_nonzero
 test_real_run_writes_config
 test_set_editor_is_opt_in
 test_set_editor_bash_login
