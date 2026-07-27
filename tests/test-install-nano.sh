@@ -244,7 +244,13 @@ test_capability_probe_errors() {
 
     # Real pico, when present (macOS ships it at /usr/bin/nano). Guarded so
     # the suite still passes on Linux, where that path is real GNU nano.
-    if [[ -x /usr/bin/nano ]] && ! /usr/bin/nano --version 2>/dev/null | grep -q 'GNU nano'; then
+    #
+    # TERM=dumb and </dev/null are load-bearing here, exactly as in
+    # nano_version above: an unguarded `/usr/bin/nano --version` blocks for
+    # tens of seconds on terminfo/terminal detection, and on a real tty it
+    # can leave pico's full-screen editor sitting there. Do not copy this
+    # invocation without both.
+    if [[ -x /usr/bin/nano ]] && ! TERM=dumb /usr/bin/nano --version </dev/null 2>/dev/null | grep -q 'GNU nano'; then
         assert_fail 'load_nano_help /usr/bin/nano' \
             "load_nano_help fails against real pico"
         assert_fail 'nano_supports linenumbers' \
