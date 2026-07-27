@@ -22,8 +22,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BLOCK_START="# >>> qol nano block >>>"
 BLOCK_END="# <<< qol nano block <<<"
 
-NANORC="$HOME/.nanorc"
-SYNTAX_DIR="$HOME/.nano"
+NANORC=""
+SYNTAX_DIR=""
 SYNTAX_REPO="https://github.com/scopatz/nanorc"
 MIN_NANO_VERSION="4.0"
 
@@ -143,6 +143,14 @@ parse_args() {
         esac
         shift
     done
+}
+
+# Resolve paths at run time, not at source time. Tests run the script under a
+# synthetic $HOME, and anything captured when the file was sourced would still
+# point at the real home directory.
+init_paths() {
+    [[ -n "$NANORC" ]]     || NANORC="$HOME/.nanorc"
+    [[ -n "$SYNTAX_DIR" ]] || SYNTAX_DIR="$HOME/.nano"
 }
 
 # ---------------------------------------------------------------------------
@@ -370,7 +378,10 @@ render_nanorc() {
     printf '\n%s\n' "$BLOCK_START"
     cat <<'BODY'
 # Managed by install_nano.sh — this whole block is rewritten on every rerun.
-# Put your own settings OUTSIDE the markers; anything inside is disposable.
+# Put your own settings ABOVE this block, not below it: the block is always
+# re-appended at the end of the file, so anything you add below it today
+# ends up above it after the next run. Anything inside the markers is
+# disposable.
 # Full directive reference: `man nanorc`
 
 # --- editing ---------------------------------------------------------------
@@ -685,9 +696,97 @@ Upgrade nano and run this script again."
 }
 
 # ---------------------------------------------------------------------------
+# Optional: make nano the default editor
+# ---------------------------------------------------------------------------
+# Off unless asked for. Setting EDITOR touches a second file and changes what
+# happens when `git commit` or `crontab -e` opens — a surprise nobody asked for
+# when all they wanted was syntax highlighting.
+EDITOR_BLOCK_START="# >>> qol nano editor >>>"
+EDITOR_BLOCK_END="# <<< qol nano editor <<<"
+
+set_default_editor() {
+    local rc
+    case "$(basename "${SHELL:-/bin/bash}")" in
+        zsh)  rc="$HOME/.zshrc" ;;
+        bash) rc="$HOME/.bashrc" ;;
+        *)    log_warn "Unrecognised shell ${SHELL:-unset}; not setting EDITOR."
+              return 0 ;;
+    esac
+
+    if [[ -n "$DRY_RUN" ]]; then
+        log_info "[dry-run] would export EDITOR=nano and VISUAL=nano in $rc"
+        return 0
+    fi
+
+    [[ -f "$rc" ]] || touch "$rc"
+
+    # Reuse the block-removal logic against this block's own markers.
+    local saved_start="$BLOCK_START" saved_end="$BLOCK_END"
+    BLOCK_START="$EDITOR_BLOCK_START"
+    BLOCK_END="$EDITOR_BLOCK_END"
+    remove_managed_block "$rc"
+    BLOCK_START="$saved_start"
+    BLOCK_END="$saved_end"
+
+    cat >> "$rc" <<EOF
+$EDITOR_BLOCK_START
+# Managed by install_nano.sh — rewritten on every rerun.
+# Put your own settings OUTSIDE the markers; anything inside is disposable.
+export EDITOR=nano
+export VISUAL=nano
+$EDITOR_BLOCK_END
+EOF
+    log_ok "Set nano as the default editor in $rc"
+}
+
+# ---------------------------------------------------------------------------
 main() {
     parse_args "$@"
-    log_ok "skeleton only"
+    init_paths
+
+    log_step "nano setup"
+    [[ -n "$DRY_RUN" ]] && log_info "Dry run — nothing will be written."
+
+    local bin
+    if ! bin="$(resolve_nano 2>/dev/null)"; then
+        install_nano_package || exit 1
+        if [[ -n "$DRY_RUN" ]]; then
+            log_info "[dry-run] stopping here; nano is not actually installed."
+            exit 0
+        fi
+        bin="$(resolve_nano)" || exit 1
+    fi
+
+    log_ok "Using $bin ($(nano_version "$bin"))"
+
+    # load_nano_help returns non-zero when the binary is missing, not
+    # executable, or not GNU nano. resolve_nano just vetted $bin, so this is
+    # not expected to fail — but main runs under set -e, and a bare call to a
+    # function that can legitimately return non-zero would kill the script
+    # with no message if it ever did. Handle it explicitly instead.
+    if ! load_nano_help "$bin"; then
+        log_err "Could not probe $bin for its supported nano options."
+        exit 1
+    fi
+
+    sync_syntax_pack
+
+    if [[ -n "$DRY_RUN" ]]; then
+        log_info "[dry-run] would write this block to $NANORC:"
+        render_nanorc
+        exit 0
+    fi
+
+    write_nanorc
+    [[ -n "$SET_EDITOR" ]] && set_default_editor
+
+    echo
+    format_font "Config:      $NANORC
+Syntax:      $SYNTAX_DIR (community) + the definitions shipped with nano
+Cheat sheet: $SCRIPT_DIR/docs/nano-cheatsheet.html
+^S saves. ^X exits. M-U undoes, M-E redoes." normal blue
+    format_font "nano is ready. Open a new file to see it." bold green
+    echo
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then

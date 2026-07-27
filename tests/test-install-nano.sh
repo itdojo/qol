@@ -1110,5 +1110,77 @@ test_sync_syntax_pack() {
 
 test_sync_syntax_pack
 
+echo
+echo "== end to end =="
+
+test_dry_run_writes_nothing() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    HOME="$tmp/home" ./install_nano.sh --dry-run --yes >/dev/null 2>&1
+
+    assert_fail "[ -f '$tmp/home/.nanorc' ]" "--dry-run writes no .nanorc"
+    assert_fail "[ -d '$tmp/home/.nano' ]"   "--dry-run clones nothing"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_real_run_writes_config() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax >/dev/null 2>&1
+
+    assert_ok "[ -f '$tmp/home/.nanorc' ]" "real run writes .nanorc"
+    assert_contains "$(cat "$tmp/home/.nanorc")" "set linenumbers" \
+        "written .nanorc carries the core settings"
+    assert_contains "$(cat "$tmp/home/.nanorc")" "bind ^S savefile main" \
+        "written .nanorc carries the ^S binding"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_set_editor_is_opt_in() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+    touch "$tmp/home/.zshrc"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax >/dev/null 2>&1
+    assert_not_contains "$(cat "$tmp/home/.zshrc")" "EDITOR" \
+        "EDITOR is not exported by default"
+
+    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    assert_contains "$(cat "$tmp/home/.zshrc")" "export EDITOR=nano" \
+        "--set-editor exports EDITOR"
+    assert_contains "$(cat "$tmp/home/.zshrc")" "export VISUAL=nano" \
+        "--set-editor exports VISUAL"
+
+    # Idempotent: a second --set-editor run must not duplicate.
+    HOME="$tmp/home" ./install_nano.sh --yes --no-syntax --set-editor >/dev/null 2>&1
+    assert_eq "1" "$(grep -c 'export EDITOR=nano' "$tmp/home/.zshrc")" \
+        "--set-editor does not duplicate on rerun"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_dry_run_writes_nothing
+test_real_run_writes_config
+test_set_editor_is_opt_in
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
