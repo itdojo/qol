@@ -400,6 +400,13 @@ test_render_nanorc() {
     assert_contains "$out" 'set matchbrackets "(<[{)>]}"' "core: matchbrackets"
     assert_contains "$out" "bind ^S savefile main" "binding: ^S saves"
 
+    # Anchored to a line start (leading newline), same reasoning as the
+    # gated-directive checks below: assert_contains is a substring match,
+    # and an unanchored "bind ^Z suspend main" needle would also match a
+    # hypothetical commented-out form of the same text.
+    assert_contains "$out" "
+bind ^Z suspend main" "binding: ^Z suspends (stock nano leaves it doing nothing)"
+
     # Anchored to a line start (leading newline) so these cannot pass against
     # the commented-out form gated_directive emits on an unsupported build —
     # "# set indicator   # unavailable ..." also contains the bare substring
@@ -893,6 +900,39 @@ test_resolve_nano() {
 
 test_resolve_nano
 
+# resolve_nano's callers use its stdout as its actual return value
+# (`bin="$(resolve_nano)"`), so any diagnostic it prints on the "not found"
+# branch MUST go to stderr, not stdout — a log_info call there without an
+# explicit >&2 would silently vanish into that captured value instead of
+# ever reaching the terminal, since log_info (unlike log_err) does not
+# redirect itself. This is exactly the shape of bug the unit tests above
+# cannot catch, since assert_eq/assert_fail only look at exit status or an
+# already-merged 2>&1 stream — it only showed up running the real script
+# end to end with a PATH that has genuinely no nano at all.
+test_resolve_nano_not_found_goes_to_stderr() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/empty"
+    local saved_path="$PATH"
+    # Full replacement, not a prepend: this dev machine has a real nano on
+    # it, and a prepend would defeat the entire point of "genuinely absent."
+    # shellcheck disable=SC2123
+    PATH="$tmp/empty"
+
+    local stdout_only stderr_only rc
+    stdout_only="$(resolve_nano 2>/dev/null)"; rc=$?
+    stderr_only="$(resolve_nano 2>&1 >/dev/null)"
+
+    assert_eq "1" "$rc" "not-found: resolve_nano returns 1, not 2"
+    assert_eq "" "$stdout_only" "not-found: stdout (the return-value channel) is empty"
+    assert_contains "$stderr_only" "No GNU nano found on PATH." \
+        "not-found: the message actually lands on stderr"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_resolve_nano_not_found_goes_to_stderr
+
 echo
 echo "== macOS pico diagnostic (seam-driven) =="
 
@@ -1160,6 +1200,8 @@ test_real_run_writes_config() {
         "written .nanorc carries the core settings"
     assert_contains "$(cat "$tmp/home/.nanorc")" "bind ^S savefile main" \
         "written .nanorc carries the ^S binding"
+    assert_contains "$(cat "$tmp/home/.nanorc")" "bind ^Z suspend main" \
+        "written .nanorc carries the ^Z suspend binding"
 
     PATH="$saved_path"
     rm -rf "$tmp"
@@ -1447,6 +1489,136 @@ test_confirm_shown_and_accepted
 test_confirm_declined_skips_write
 test_confirm_non_tty_proceeds_without_yes
 test_dry_run_never_prompts
+
+echo
+echo "== closing summary reflects what was actually written =="
+
+# Declining still returned exit 0 and printed the normal "Config: ...
+# nano is ready" summary over an empty home directory — the ⚠️  Skipped
+# lines had already scrolled past by then, so a student who hits Enter out
+# of habit (the documented empty-reply default) was told the job was done
+# when nothing had changed. These three cover the shapes: accepted
+# everything, declined everything, and a mixed y/n.
+
+test_summary_accept_everything() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local out rc
+    out="$(printf 'y\ny\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 SHELL=/bin/zsh \
+           HOME="$tmp/home" ./install_nano.sh --no-syntax --set-editor 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "accept-everything: exits 0"
+    assert_ok "[ -f '$tmp/home/.nanorc' ]" "accept-everything: .nanorc written"
+    assert_contains "$(cat "$tmp/home/.zshrc")" "export EDITOR=nano" \
+        "accept-everything: EDITOR written"
+    assert_contains "$out" "nano is ready" \
+        "accept-everything: summary shows the normal ready message"
+    assert_not_contains "$out" "Nothing was changed" \
+        "accept-everything: does not claim nothing changed"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_summary_decline_everything() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    # Empty replies, not explicit 'n' — this is the documented default
+    # (bare Enter declines) and the exact case the reviewer's repro used.
+    local out rc
+    out="$(printf '\n\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 SHELL=/bin/zsh \
+           HOME="$tmp/home" ./install_nano.sh --no-syntax --set-editor 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "decline-everything: exits 0 (declining is not an error)"
+    assert_fail "[ -f '$tmp/home/.nanorc' ]" "decline-everything: no .nanorc written"
+    assert_fail "[ -f '$tmp/home/.zshrc' ] && grep -q EDITOR '$tmp/home/.zshrc'" \
+        "decline-everything: EDITOR not written"
+    assert_contains "$out" "Nothing was changed" \
+        "decline-everything: summary says plainly that nothing changed"
+    assert_contains "$out" "pass --yes" \
+        "decline-everything: summary explains how to actually do it"
+    assert_not_contains "$out" "nano is ready" \
+        "decline-everything: does not claim the job is done"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_summary_mixed() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    # Accept the qol block, decline EDITOR.
+    local out rc
+    out="$(printf 'y\nn\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 SHELL=/bin/zsh \
+           HOME="$tmp/home" ./install_nano.sh --no-syntax --set-editor 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "mixed accept/decline: exits 0"
+    assert_ok "[ -f '$tmp/home/.nanorc' ]" \
+        "mixed accept/decline: .nanorc written (accepted)"
+    assert_fail "[ -f '$tmp/home/.zshrc' ] && grep -q EDITOR '$tmp/home/.zshrc'" \
+        "mixed accept/decline: EDITOR not written (declined)"
+    assert_contains "$out" "nano is ready" \
+        "mixed accept/decline: still shows ready, since something was written"
+    assert_contains "$out" "EDITOR/VISUAL were not set (declined)" \
+        "mixed accept/decline: summary reflects only what exists"
+    assert_not_contains "$out" "Nothing was changed" \
+        "mixed accept/decline: does not claim nothing changed"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+# The other half of the mix: decline the qol block, accept EDITOR. Proves
+# the conditional summary logic is symmetric, not just checked one way.
+test_summary_mixed_reverse() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home"
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    local out rc
+    out="$(printf 'n\ny\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 SHELL=/bin/zsh \
+           HOME="$tmp/home" ./install_nano.sh --no-syntax --set-editor 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "mixed decline/accept: exits 0"
+    assert_fail "[ -f '$tmp/home/.nanorc' ]" \
+        "mixed decline/accept: no .nanorc written (declined)"
+    assert_contains "$(cat "$tmp/home/.zshrc")" "export EDITOR=nano" \
+        "mixed decline/accept: EDITOR written (accepted)"
+    assert_contains "$out" "was not written (declined)" \
+        "mixed decline/accept: summary says the qol block was declined"
+    assert_contains "$out" "nano is ready" \
+        "mixed decline/accept: still shows ready, since something was written"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_summary_accept_everything
+test_summary_decline_everything
+test_summary_mixed
+test_summary_mixed_reverse
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

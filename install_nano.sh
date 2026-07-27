@@ -418,6 +418,14 @@ set multibuffer         # ^R reads a file into a new buffer instead of inline
 # student who hits it on a serial console gets what looks like a frozen
 # machine. ^X remains the way out, and it is on the help bar at all times.
 bind ^S savefile main
+
+# Stock nano leaves ^Z doing nothing at all — not undo, not suspend, just a
+# dead key (confirmed with `ps`: the process stays in state S, never T). The
+# man page's own EXAMPLES section gives this exact binding. Every other
+# program on the system suspends on ^Z; a key that silently does nothing in
+# one program teaches the wrong lesson in a course that covers job control.
+# `fg` returns to nano afterward.
+bind ^Z suspend main
 BODY
 
     printf '\n# --- syntax highlighting ---------------------------------------------------\n'
@@ -435,18 +443,29 @@ EOF
 # ---------------------------------------------------------------------------
 # Writing ~/.nanorc
 # ---------------------------------------------------------------------------
+# LAST_BACKUP_PATH is a result-out-of-band global, same convention as
+# nano_help_cache: it lets a caller that goes on to fail on a *later* step
+# clean up the backup this function just took, rather than leaving a stray
+# .bak behind from a write that never actually completed.
+LAST_BACKUP_PATH=""
+
 backup_file() {
-    local f="$1" backup
+    local f="$1"
+    LAST_BACKUP_PATH=""
     [[ -f "$f" ]] || return 0
+    local backup
     backup="$f.pre-nano.$(date +%Y%m%d-%H%M%S).bak"
     # `cp` was previously a bare statement followed unconditionally by
     # log_info — log_info always succeeds, so it masked a failed copy behind
-    # a "Backed up" message that never happened. Check it explicitly.
-    if ! cp "$f" "$backup"; then
+    # a "Backed up" message that never happened. Check it explicitly. Its
+    # own stderr is suppressed: a failure here already gets a clearer ❌
+    # line below, and the raw `cp: ...` text would just stack above it.
+    if ! cp "$f" "$backup" 2>/dev/null; then
         log_err "Could not back up $f to $backup."
         return 1
     fi
     log_info "Backed up $f → $backup"
+    LAST_BACKUP_PATH="$backup"
 }
 
 # Overwrite dst with the contents of src, atomically.
@@ -486,17 +505,21 @@ replace_file_contents() {
         || stat -c '%a' "$target" 2>/dev/null \
         || echo 644)"
 
-    tmp="$(mktemp "${target}.XXXXXX")" || {
+    tmp="$(mktemp "${target}.XXXXXX" 2>/dev/null)" || {
         log_err "Could not create a temporary file next to $target"
         return 1
     }
 
-    cat "$src" > "$tmp" || {
+    # Every command below has its own stderr suppressed: each failure path
+    # already prints a clearer ❌ line of its own, and the raw tool message
+    # (cat's, chmod's, mv's) would just stack a second, less useful message
+    # directly above it.
+    cat "$src" > "$tmp" 2>/dev/null || {
         rm -f "$tmp"
         log_err "Could not write a replacement for $target."
         return 1
     }
-    chmod "$mode" "$tmp" || {
+    chmod "$mode" "$tmp" 2>/dev/null || {
         rm -f "$tmp"
         log_err "Could not set permissions on the replacement for $target."
         return 1
@@ -510,7 +533,7 @@ replace_file_contents() {
     # whole script died under set -e. -f skips the prompt; a genuine
     # permission problem (unwritable directory) still fails, and now it is
     # caught here with a clear message instead.
-    if ! mv -f "$tmp" "$target"; then
+    if ! mv -f "$tmp" "$target" 2>/dev/null; then
         rm -f "$tmp"
         log_err "Could not replace $target (permission denied?)."
         return 1
@@ -521,7 +544,7 @@ replace_file_contents() {
 remove_managed_block() {
     local file="$1" tmp
     grep -qF "$BLOCK_START" "$file" || return 0
-    tmp="$(mktemp)" || {
+    tmp="$(mktemp 2>/dev/null)" || {
         log_err "Could not create a temporary file to update $file."
         return 1
     }
@@ -542,22 +565,31 @@ write_nanorc() {
     # with nothing but a raw tool error (e.g. `touch: No such file or
     # directory` for a dangling symlink, or a stray .bak with no explanation
     # of what happened next). main() wraps this call in `|| exit 1`, exactly
-    # like install_nano_package and resolve_nano.
+    # like install_nano_package and resolve_nano. The underlying commands'
+    # own stderr is suppressed once there's a clearer ❌ line of our own —
+    # otherwise a failure reads as two stacked messages, a raw tool line
+    # right above the branded one.
     if [[ ! -f "$NANORC" ]]; then
-        if ! touch "$NANORC"; then
+        if ! touch "$NANORC" 2>/dev/null; then
             log_err "Could not create $NANORC (dangling symlink to a missing directory?)."
             return 1
         fi
     fi
 
-    # Only back up a file we have not managed before. Backing up on every rerun
-    # would litter the home directory with near-identical copies.
+    # Only back up a file we have not managed before. Backing up on every
+    # rerun would litter the home directory with near-identical copies.
+    # backup_path is remembered so it can be removed again if a later step
+    # in this same function fails — otherwise a backup taken right before an
+    # aborted write is a stray artifact of a write that never completed.
+    local backup_path=""
     if ! grep -qF "$BLOCK_START" "$NANORC" && [[ -s "$NANORC" ]]; then
         backup_file "$NANORC" || return 1
+        backup_path="$LAST_BACKUP_PATH"
     fi
 
     remove_managed_block "$NANORC" || {
         log_err "Could not update $NANORC while removing its previous qol block."
+        [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 1
     }
 
@@ -572,8 +604,9 @@ write_nanorc() {
     # would drop every blank line in the file, including the user's own
     # interior spacing — not just the trailing run left by block removal.
     local tmp
-    tmp="$(mktemp)" || {
+    tmp="$(mktemp 2>/dev/null)" || {
         log_err "Could not create a temporary file to rewrite $NANORC."
+        [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 1
     }
     awk '{ lines[NR] = $0 }
@@ -584,13 +617,21 @@ write_nanorc() {
          }' "$NANORC" > "$tmp"
     replace_file_contents "$tmp" "$NANORC" || {
         log_err "Could not update $NANORC while trimming trailing blank lines."
+        [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 1
     }
 
-    render_nanorc >> "$NANORC" || {
+    # Grouped so the outer 2>/dev/null also catches the redirection-open
+    # failure itself (e.g. a genuinely read-only $NANORC), not just
+    # render_nanorc's own stderr. A trailing `2>/dev/null` on this line
+    # alone would not: `>>` is set up before that redirection takes effect,
+    # so an open failure would still print to the original stderr first —
+    # confirmed empirically before relying on it.
+    if ! { render_nanorc >> "$NANORC"; } 2>/dev/null; then
         log_err "Could not append the qol block to $NANORC."
+        [[ -n "$backup_path" ]] && rm -f "$backup_path"
         return 1
-    }
+    fi
     log_ok "Wrote the qol block to $NANORC"
 }
 
@@ -744,7 +785,24 @@ Run this script normally (without overriding PATH) to install it."
 resolve_nano() {
     local bin version
     bin="$(command -v nano 2>/dev/null)" || {
-        log_err "nano is not on PATH."
+        # Not found is an expected precondition on a fresh machine, not a
+        # failure of anything — most students hit this branch on their very
+        # first run. log_err's ❌ reads as "something went wrong" right
+        # before a successful install; log_info here, and main() follows up
+        # with its own "installing it now" once it decides to install rather
+        # than this function presuming that's what happens next.
+        #
+        # >&2 is load-bearing, not stylistic: callers use resolve_nano's
+        # stdout as its actual return value (`bin="$(resolve_nano)"`), the
+        # same convention nano_version and pkg_install_cmd use. log_err
+        # already redirects itself to stderr, which is why the pico/too-old
+        # diagnostics below were never affected by this — but log_info does
+        # not, so without >&2 here this message would silently vanish into
+        # $bin instead of ever reaching the terminal. Caught by actually
+        # running the script end to end, not just the unit tests, which
+        # capture stderr and stdout together and could not have told the
+        # difference.
+        log_info "No GNU nano found on PATH." >&2
         return 1
     }
 
@@ -823,7 +881,7 @@ EOF
         [[ -n "$rc" ]] || continue
 
         if [[ ! -f "$rc" ]]; then
-            if ! touch "$rc"; then
+            if ! touch "$rc" 2>/dev/null; then
                 log_err "Could not create $rc (dangling symlink to a missing directory?)."
                 return 1
             fi
@@ -833,9 +891,13 @@ EOF
         # write_nanorc — this is the more valuable of the two files (it is
         # someone's whole shell startup, not just their editor config), so
         # it does not get skipped just because it's the second file this
-        # script touches.
+        # script touches. backup_path is remembered so it can be removed
+        # again if a later step for this same rc file fails, same reasoning
+        # as write_nanorc.
+        local backup_path=""
         if ! grep -qF "$EDITOR_BLOCK_START" "$rc" && [[ -s "$rc" ]]; then
             backup_file "$rc" || return 1
+            backup_path="$LAST_BACKUP_PATH"
         fi
 
         # Reuse the block-removal logic against this block's own markers.
@@ -853,10 +915,17 @@ EOF
         BLOCK_END="$saved_end"
         if [[ "$remove_rc" -ne 0 ]]; then
             log_err "Could not update $rc while removing its previous EDITOR block."
+            [[ -n "$backup_path" ]] && rm -f "$backup_path"
             return 1
         fi
 
-        if ! cat >> "$rc" <<EOF
+        # Grouped so the outer 2>/dev/null also catches the redirection-open
+        # failure itself (e.g. a genuinely read-only $rc), not just
+        # whatever `cat` itself would print — the `>>` is set up before a
+        # trailing `2>/dev/null` on this same line would take effect, so it
+        # would not otherwise be suppressed. Same fix as write_nanorc's
+        # final append, confirmed empirically there before relying on it.
+        if ! { cat >> "$rc" <<EOF
 $EDITOR_BLOCK_START
 # Managed by install_nano.sh — rewritten on every rerun.
 # Put your own settings ABOVE this block, not below it: the block is always
@@ -866,8 +935,10 @@ export EDITOR=nano
 export VISUAL=nano
 $EDITOR_BLOCK_END
 EOF
+        } 2>/dev/null
         then
             log_err "Could not write to $rc (permission denied?)."
+            [[ -n "$backup_path" ]] && rm -f "$backup_path"
             return 1
         fi
         log_ok "Set nano as the default editor in $rc"
@@ -941,6 +1012,7 @@ main() {
         exit 1
     fi
     if [[ "$rc" -ne 0 ]]; then
+        log_info "Installing it now."
         install_nano_package || exit 1
         if [[ -n "$DRY_RUN" ]]; then
             log_info "[dry-run] stopping here; nano is not actually installed."
@@ -970,6 +1042,14 @@ main() {
         exit 0
     fi
 
+    # Tracked explicitly so the closing summary can tell the truth. Without
+    # this, declining both prompts (or just hitting Enter, the documented
+    # default) still fell through to the normal "Config: ... nano is ready"
+    # summary and exit 0 — the ⚠️  Skipped lines above had already scrolled
+    # past, and a student who declines out of habit was told the job was
+    # done over an empty home directory.
+    local nanorc_written="" editor_written=""
+
     if confirm "Write the qol block to $NANORC?"; then
         # write_nanorc, like install_nano_package and resolve_nano, gives its
         # own callers a meaningful non-zero return with a ❌ line already
@@ -978,6 +1058,7 @@ main() {
         # fail and take the whole script down under set -e with nothing but
         # a raw tool error.
         write_nanorc || exit 1
+        nanorc_written=1
     else
         log_warn "Skipped writing $NANORC at your request."
     fi
@@ -985,26 +1066,51 @@ main() {
     if [[ -n "$SET_EDITOR" ]]; then
         if confirm "Export EDITOR=nano and VISUAL=nano in your shell rc?"; then
             set_default_editor || exit 1
+            editor_written=1
         else
             log_warn "Skipped setting EDITOR/VISUAL at your request."
         fi
     fi
 
     echo
-    local syntax_line
-    if [[ -d "$SYNTAX_DIR" ]]; then
-        syntax_line="Syntax:      $SYNTAX_DIR (community) + the definitions shipped with nano"
-    else
-        # Covers both --no-syntax and a clone that never happened (no git,
-        # or a failed clone) — printing a path that doesn't exist would be
-        # its own small trust-eroding bug, same spirit as never warning
-        # about a syntax include that matches nothing.
-        syntax_line="Syntax:      the definitions shipped with nano (no community pack)"
+    if [[ -z "$nanorc_written" && -z "$editor_written" ]]; then
+        # Every prompt this run offered was declined (or every reply was
+        # empty, which defaults to the same thing). Say so plainly instead
+        # of the normal "ready" summary — nothing changed, so nothing
+        # should sound finished.
+        format_font "Nothing was changed — every prompt was declined.
+Re-run without --yes and answer y, or pass --yes, to actually write the config." bold yellow
+        echo
+        exit 0
     fi
-    format_font "Config:      $NANORC
+
+    if [[ -n "$nanorc_written" ]]; then
+        local syntax_line
+        if [[ -d "$SYNTAX_DIR" ]]; then
+            syntax_line="Syntax:      $SYNTAX_DIR (community) + the definitions shipped with nano"
+        else
+            # Covers both --no-syntax and a clone that never happened (no
+            # git, or a failed clone) — printing a path that doesn't exist
+            # would be its own small trust-eroding bug, same spirit as
+            # never warning about a syntax include that matches nothing.
+            syntax_line="Syntax:      the definitions shipped with nano (no community pack)"
+        fi
+        format_font "Config:      $NANORC
 $syntax_line
 Cheat sheet: $SCRIPT_DIR/docs/nano-cheatsheet.html
-^S saves. ^X exits. M-U undoes, M-E redoes." normal blue
+^S saves. ^X exits. ^Z suspends (fg to resume). M-U undoes, M-E redoes." normal blue
+    else
+        # Mixed case: EDITOR was set but the qol block itself was declined.
+        # nano is still installed and usable — just not configured by this
+        # run — so say that plainly rather than showing a Config: block for
+        # a file that was never written.
+        format_font "$NANORC was not written (declined). nano itself is installed and usable." normal blue
+    fi
+
+    if [[ -n "$SET_EDITOR" && -z "$editor_written" ]]; then
+        format_font "EDITOR/VISUAL were not set (declined)." normal blue
+    fi
+
     format_font "nano is ready. Open a new file to see it." bold green
     echo
 }

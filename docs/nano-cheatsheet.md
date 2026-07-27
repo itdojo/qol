@@ -12,6 +12,7 @@ will not work.
 |:--|:--|
 | `^X` | Exit. Prompts to save if the file changed. |
 | `^S` | Save, no prompt. **(qol)** |
+| `^Z` | Suspend nano and drop to the shell. Type `fg` to return. **(qol)** |
 | `^O` | Save As — prompts for the filename. Stock nano's save key. |
 | `^C` | Show the cursor's line, column, and character count. Does **not** quit. |
 
@@ -40,10 +41,6 @@ If you are stuck at a prompt, `^C` cancels it.
 | `M-3` | Comment or uncomment the line, using the right character for the file type. |
 | `Tab` / `Shift-Tab` | Indent / unindent. Works on a selection too. |
 | `^T` | Run a command and read its output. |
-
-`^Z` by itself does nothing but remind you of the real sequence: `^T` then `^Z`
-suspends nano and drops you back to the shell. Type `fg` to return. Neither one
-is undo — undo is `M-U`.
 
 ## Select and copy
 
@@ -92,6 +89,7 @@ Search history is kept between sessions **(qol)** — press ↑ at the search pr
 - Long lines wrap on screen at word boundaries without newlines being inserted.
 - Reopening a file returns you to where you left off.
 - `^S` saves.
+- `^Z` suspends and drops you to the shell. Type `fg` to return.
 - `^Q` is deliberately **not** bound to quit. On many terminals `^Q` is flow
   control and can make the terminal look frozen. Use `^X`.
 
