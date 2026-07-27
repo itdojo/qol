@@ -36,6 +36,18 @@ alias gotime="$HOME/projects/qol/gotime"
 # -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
+#                                                            NETWORK STATUS
+# -------------------------------------------------------------------------
+# One-line Wi-Fi + internet readout on shell startup. Sourcing only defines the
+# functions; netstatus_boot decides whether to print. Inside tmux it prints in
+# the first shell of a session and stays quiet in every later pane and window.
+if [ -r "$HOME/projects/qol/netstatus.sh" ]; then
+    source "$HOME/projects/qol/netstatus.sh"
+    netstatus_boot
+fi
+# -------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------
 #                                                                HINTS MENU
 # -------------------------------------------------------------------------
 echo "Enter 'hint' for shortcuts reminder"
@@ -49,6 +61,7 @@ function hint() {
   upup                - apt update/upgrade
   here / back         - Mark / return to dir
   getnat              - Get Public IP
+  netstatus [-f]      - Wi-Fi + internet status (-f forces a fresh check)
 
 -- DIRECTORIES ------------------------------------------------------------
   courses / class     - Courseware
