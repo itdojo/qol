@@ -1,0 +1,634 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>nano cheat sheet · IT Dojo</title>
+
+<!-- Set theme as early as possible to avoid a flash of the wrong theme. -->
+<script>
+(function () {
+  try {
+    var s = localStorage.getItem('nano-cheatsheet-theme');
+    var d = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.setAttribute('data-theme', s || (d ? 'dark' : 'light'));
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+</script>
+
+<style>
+/* ============================================================
+   IT DOJO DESIGN SYSTEM — tokens copied verbatim from
+   itdojo-design-system.html, except the two font tokens, which
+   are fallback-only stacks: this page must render with no
+   network access on a lab machine.
+   ============================================================ */
+
+:root {
+  /* ─── COLOR · PRIMARY ──────────────────────────────────────
+     IT Dojo brand: violet ink + jade action. */
+  --violet:      #3E3566;  /* primary brand · ink-tone */
+  --jade:        #3CB858;  /* primary action · highlight */
+
+  /* ─── COLOR · ACCENT (light surfaces) ────────────────── */
+  --lavender:    #F1ECFA;  /* light violet wash */
+  --mint:        #D4F2E4;  /* light jade wash */
+
+  /* ─── COLOR · NEUTRAL (cool gray, violet-tinted) ─────── */
+  --white:       #FFFFFF;
+  --gray-50:     #FAFAFC;
+  --gray-100:    #ECEAF2;
+  --gray-300:    #BEB9CC;
+  --gray-500:    #807A95;
+  --gray-700:    #2A2347;
+  --gray-900:    #14102B;
+
+  /* ─── COLOR · SEMANTIC ─────────────────────────────────── */
+  --success:     #3CB858;  /* jade — matches brand */
+  --warning:     #D89C2C;  /* saffron */
+  --danger:      #A8334A;  /* wine — for error states only, not branding */
+  --info:        #4A6FA5;  /* steel blue */
+
+  /* Solid violet fill — only meaningful as an override in dark mode,
+     where --violet itself is lightened to serve as ink. */
+  --violet-solid: var(--violet);
+
+  /* Terminal code-block surface (stays dark in both themes). */
+  --terminal-bg:  var(--gray-900);
+  --terminal-fg:  var(--lavender);
+  --terminal-str: var(--mint);
+
+  /* ─── TYPOGRAPHY ───────────────────────────────────────── */
+  --font-text: 'Roboto', system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-mono: 'Fira Code', ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', Consolas, monospace;
+
+  /* type scale */
+  --fs-display: 40px;
+  --fs-h1:      28px;
+  --fs-h2:      20px;
+  --fs-body:    15px;
+  --fs-small:   13px;
+  --fs-caption: 11px;
+
+  /* ─── SPACING ──────────────────────────────────────────── */
+  --sp-1:  4px;
+  --sp-2:  8px;
+  --sp-3:  12px;
+  --sp-4:  16px;
+  --sp-5:  24px;
+  --sp-6:  32px;
+  --sp-7:  48px;
+  --sp-8:  64px;
+
+  /* ─── RADIUS ───────────────────────────────────────────── */
+  --r-xs: 2px;
+  --r-sm: 4px;
+  --r-md: 6px;
+  --r-lg: 10px;
+
+  /* ─── ELEVATION ────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(62, 53, 102, 0.08);
+  --shadow-md: 0 4px 10px rgba(62, 53, 102, 0.10);
+  --shadow-lg: 0 12px 28px rgba(62, 53, 102, 0.14);
+
+  /* ─── BORDERS ──────────────────────────────────────────── */
+  --hairline: 1px solid var(--gray-100);
+  --rule:     1px solid var(--violet);
+}
+
+/* ============================================================
+   DARK THEME — token override layer.
+   Brand hues survive (violet=ink, jade=action); the neutral ramp
+   and the two tinted washes invert. Component CSS is unchanged
+   except for the handful of fill/contrast fixes below.
+   ============================================================ */
+[data-theme="dark"] {
+  --violet:       #BCB0E8;  /* ink-tone, lightened for text on dark */
+  --violet-solid: #4A3F7A;  /* deep violet for solid fills */
+  --jade:         #4ECE6A;  /* action, brightened for contrast */
+
+  --lavender:     #241D3D;  /* dark violet wash */
+  --mint:         #15321F;  /* dark jade wash */
+
+  --white:        #0F0B1E;  /* page background */
+  --gray-50:      #16112C;
+  --gray-100:     #2A2347;
+  --gray-300:     #4A4170;
+  --gray-500:     #9A93B5;
+  --gray-700:     #C9C3DD;
+  --gray-900:     #DAD5EC;  /* descriptive prose (now light) */
+
+  --success:      #4ECE6A;
+  --warning:      #E0B45A;
+  --danger:       #E06B82;
+  --info:         #7AA0D8;
+
+  --terminal-bg:  #08060F;  /* near-black terminal panel, distinct from page */
+  --terminal-fg:  #E4DEF5;  /* light text, not the flipped (dark) lavender */
+  --terminal-str: #86E6B0;  /* light string token, not the flipped (dark) mint */
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.40);
+  --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.50);
+  --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.60);
+}
+
+/* ============================================================
+   PAGE — nano cheat sheet
+   ============================================================ */
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--white);
+  color: var(--violet);
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-6) var(--sp-8);
+}
+
+/* ─── HEADER ───────────────────────────────────────────── */
+.page-header {
+  position: relative;
+  margin-bottom: var(--sp-6);
+  padding-bottom: var(--sp-5);
+  border-bottom: 2px solid var(--violet);
+}
+.page-header::before {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 80px;
+  height: 2px;
+  background: var(--jade);
+}
+.crest {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  margin-bottom: var(--sp-3);
+}
+.page-header h1 {
+  font-size: var(--fs-display);
+  font-weight: 700;
+  margin: 0 0 var(--sp-3) 0;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+  color: var(--violet);
+}
+.lede {
+  color: var(--gray-900);
+  font-size: var(--fs-body);
+  max-width: 68ch;
+  margin: 0;
+}
+
+/* ─── THEME TOGGLE (ghost button) ─────────────────────── */
+.theme-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-family: var(--font-text);
+  font-size: var(--fs-small);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--violet);
+  background: transparent;
+  border: none;
+  border-radius: var(--r-sm);
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+.theme-toggle:hover { background: var(--lavender); }
+
+/* ─── CARDS ────────────────────────────────────────────── */
+.card {
+  background: var(--white);
+  border-radius: var(--r-sm);
+  padding: var(--sp-5);
+}
+/* Variant D — accent stripe: 3px jade left border, gray-100 elsewhere. */
+.card-accent {
+  border-left: 3px solid var(--jade);
+  border-top: 1px solid var(--gray-100);
+  border-right: 1px solid var(--gray-100);
+  border-bottom: 1px solid var(--gray-100);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+/* Variant B — outlined: gray-300 border on white. */
+.card-outline {
+  border: 1px solid var(--gray-300);
+}
+
+.hero {
+  margin-bottom: var(--sp-6);
+}
+.hero .v {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--jade);
+  font-weight: 700;
+  display: block;
+  margin-bottom: var(--sp-2);
+}
+.hero .hero-note {
+  font-size: var(--fs-small);
+  color: var(--gray-500);
+  margin: var(--sp-3) 0 0 0;
+}
+
+section.card h2 {
+  font-size: var(--fs-h2);
+  font-weight: 700;
+  margin: 0 0 var(--sp-4) 0;
+  color: var(--violet);
+}
+
+/* ─── TABLES ───────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+th, td {
+  text-align: left;
+  padding: var(--sp-2) var(--sp-1);
+  vertical-align: top;
+  font-size: var(--fs-small);
+}
+thead th {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  border-bottom: 1px solid var(--gray-300);
+  padding-bottom: var(--sp-2);
+}
+tbody td {
+  border-bottom: 1px solid var(--gray-100);
+  color: var(--gray-900);
+}
+tbody tr:last-child td { border-bottom: none; }
+td.key-cell { white-space: nowrap; width: 1%; padding-right: var(--sp-4); }
+
+/* ─── KBD (from the inline-code rule) ─────────────────── */
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--lavender);
+  color: var(--violet);
+  padding: 2px 6px;
+  border-radius: var(--r-xs);
+  border: none;
+  white-space: nowrap;
+}
+
+/* ─── QOL BADGE ────────────────────────────────────────── */
+.badge-qol {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--mint);
+  color: #1E7A37;
+  margin-left: var(--sp-2);
+}
+.badge-qol::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+[data-theme="dark"] .badge-qol { color: #7BE098; }
+
+/* ─── CALLOUTS ─────────────────────────────────────────── */
+.callout {
+  display: flex;
+  gap: var(--sp-3);
+  padding: var(--sp-3) var(--sp-4);
+  border-left: 3px solid;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  font-size: var(--fs-small);
+  color: var(--violet);
+  margin-top: var(--sp-4);
+}
+.callout strong { display: block; margin-bottom: 2px; }
+.callout-icon {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  flex-shrink: 0;
+}
+.callout-warn {
+  border-color: var(--warning);
+  background: rgba(216, 156, 44, 0.18);
+}
+.callout-warn .callout-icon { color: var(--warning); }
+.callout-info {
+  border-color: var(--info);
+  background: rgba(74, 111, 165, 0.10);
+}
+.callout-info .callout-icon { color: var(--info); }
+[data-theme="dark"] .callout-warn { background: rgba(224, 180, 90, 0.16); }
+[data-theme="dark"] .callout-info { background: rgba(122, 160, 216, 0.14); }
+
+.note-small {
+  font-size: var(--fs-small);
+  color: var(--gray-500);
+  margin: var(--sp-3) 0 0 0;
+}
+
+ul.change-list {
+  margin: 0;
+  padding-left: 1.2em;
+  color: var(--gray-900);
+  font-size: var(--fs-small);
+}
+ul.change-list li { margin-bottom: var(--sp-2); }
+ul.change-list li:last-child { margin-bottom: 0; }
+
+/* ─── GRID ─────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-5);
+}
+@media (max-width: 700px) {
+  .grid { grid-template-columns: 1fr; }
+}
+
+/* ─── FOOTER ───────────────────────────────────────────── */
+footer {
+  margin-top: var(--sp-7);
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--violet);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-500);
+  text-align: center;
+}
+
+/* ============================================================
+   PRINT
+   ============================================================ */
+@media print {
+  :root { color-scheme: light; }
+
+  /* Component CSS reads colors from custom properties, and those still
+     follow data-theme="dark" at print time if the student's browser was
+     in dark mode. Re-pin every token to its light value here so cards,
+     badges, callouts, and headings print light even though only
+     html/body and kbd get hardcoded overrides below. */
+  :root, [data-theme="dark"] {
+    --violet: #3E3566;
+    --violet-solid: #3E3566;
+    --jade: #3CB858;
+    --lavender: #F1ECFA;
+    --mint: #D4F2E4;
+    --white: #FFFFFF;
+    --gray-50: #FAFAFC;
+    --gray-100: #ECEAF2;
+    --gray-300: #BEB9CC;
+    --gray-500: #807A95;
+    --gray-700: #2A2347;
+    --gray-900: #14102B;
+    --warning: #D89C2C;
+    --info: #4A6FA5;
+    --danger: #A8334A;
+  }
+
+  html, body { background: #FFFFFF !important; color: #14102B !important; }
+  .theme-toggle { display: none; }
+  main { max-width: none; padding: 0; }
+  .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .card { break-inside: avoid; box-shadow: none; border: 1px solid #BEB9CC; }
+  kbd { background: #F1ECFA !important; color: #3E3566 !important; border: 1px solid #BEB9CC; }
+  @page { margin: 12mm; }
+}
+</style>
+</head>
+<body>
+<main>
+
+  <header class="page-header">
+    <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle light / dark theme">☾ Dark</button>
+    <div class="crest">⛩ IT Dojo · nano cheat sheet</div>
+    <h1>nano cheat sheet</h1>
+    <p class="lede">
+      <kbd>^</kbd> means Ctrl. <kbd>M-</kbd> means Alt on Linux, or Esc-then-key
+      on macOS — press and release Esc, then the key. Key names are not case
+      sensitive: <kbd>^X</kbd> is Ctrl and X. Rows badged
+      <span class="badge-qol">QOL</span> exist because of
+      <code>install_nano.sh</code>. On stock nano they will not work.
+    </p>
+  </header>
+
+  <div class="card card-accent hero">
+    <span class="v">Stuck? Start here</span>
+    <table>
+      <thead><tr><th>Key</th><th>Does</th></tr></thead>
+      <tbody>
+        <tr><td class="key-cell"><kbd>^X</kbd></td><td>Exit. Prompts to save if the file changed.</td></tr>
+        <tr><td class="key-cell"><kbd>^S</kbd></td><td>Save, no prompt. <span class="badge-qol">QOL</span></td></tr>
+      </tbody>
+    </table>
+    <p class="hero-note">These two get you out of any jam. Everything else below is detail.</p>
+  </div>
+
+  <div class="grid">
+
+    <section class="card card-outline">
+      <h2>Get out</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^X</kbd></td><td>Exit. Prompts to save if the file changed.</td></tr>
+          <tr><td class="key-cell"><kbd>^S</kbd></td><td>Save, no prompt. <span class="badge-qol">QOL</span></td></tr>
+          <tr><td class="key-cell"><kbd>^Z</kbd></td><td>Suspend nano and drop to the shell. Type <code>fg</code> to return. <span class="badge-qol">QOL</span></td></tr>
+          <tr><td class="key-cell"><kbd>^O</kbd></td><td>Save As — prompts for the filename. Stock nano's save key.</td></tr>
+          <tr><td class="key-cell"><kbd>^C</kbd></td><td>Show the cursor's line, column, and character count. Does <strong>not</strong> quit.</td></tr>
+        </tbody>
+      </table>
+      <p class="note-small">If you are stuck at a prompt, <kbd>^C</kbd> cancels it.</p>
+    </section>
+
+    <section class="card card-outline">
+      <h2>Move</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^A</kbd> / <kbd>^E</kbd></td><td>Start / end of line.</td></tr>
+          <tr><td class="key-cell"><kbd>^Y</kbd> / <kbd>^V</kbd></td><td>Page up / page down.</td></tr>
+          <tr><td class="key-cell"><kbd>^/</kbd> then a number</td><td>Go to that line. (<kbd>^_</kbd> also works.)</td></tr>
+          <tr><td class="key-cell"><kbd>M-\</kbd> / <kbd>M-/</kbd></td><td>Start / end of the file.</td></tr>
+          <tr><td class="key-cell"><kbd>M-]</kbd></td><td>Jump to the matching bracket.</td></tr>
+          <tr><td class="key-cell"><kbd>M-7</kbd> / <kbd>M-8</kbd></td><td>Previous / next block of text.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card card-outline">
+      <h2>Edit</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^K</kbd></td><td>Cut the current line. Press repeatedly to cut several.</td></tr>
+          <tr><td class="key-cell"><kbd>^U</kbd></td><td>Paste what was cut.</td></tr>
+          <tr><td class="key-cell"><kbd>M-6</kbd></td><td>Copy the current line without cutting it.</td></tr>
+          <tr><td class="key-cell"><kbd>M-U</kbd></td><td>Undo.</td></tr>
+          <tr><td class="key-cell"><kbd>M-E</kbd></td><td>Redo.</td></tr>
+          <tr><td class="key-cell"><kbd>M-3</kbd></td><td>Comment or uncomment the line, using the right character for the file type.</td></tr>
+          <tr><td class="key-cell"><kbd>Tab</kbd> / <kbd>Shift-Tab</kbd></td><td>Indent / unindent. Works on a selection too.</td></tr>
+          <tr><td class="key-cell"><kbd>^T</kbd></td><td>Run a command and read its output.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card card-outline">
+      <h2>Select and copy</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^6</kbd> or <kbd>M-A</kbd></td><td>Start selecting. Move the cursor to extend.</td></tr>
+          <tr><td class="key-cell"><kbd>^K</kbd></td><td>Cut the selection.</td></tr>
+          <tr><td class="key-cell"><kbd>M-6</kbd></td><td>Copy the selection.</td></tr>
+          <tr><td class="key-cell"><kbd>^6</kbd> again</td><td>Cancel the selection.</td></tr>
+        </tbody>
+      </table>
+      <p class="note-small">Copying <em>out of</em> nano into another application is your terminal's job, not nano's — use the terminal's own select-and-copy.</p>
+    </section>
+
+    <section class="card card-outline">
+      <h2>Search and replace</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^W</kbd></td><td>Search forwards.</td></tr>
+          <tr><td class="key-cell"><kbd>M-W</kbd></td><td>Repeat the last search.</td></tr>
+          <tr><td class="key-cell"><kbd>^\</kbd></td><td>Search and replace. <kbd>A</kbd> at the prompt replaces all.</td></tr>
+          <tr><td class="key-cell"><kbd>M-R</kbd></td><td>Toggle regular expressions in the search prompt.</td></tr>
+          <tr><td class="key-cell"><kbd>M-C</kbd></td><td>Toggle case sensitivity.</td></tr>
+        </tbody>
+      </table>
+      <p class="note-small">Search history is kept between sessions <span class="badge-qol">QOL</span> — press &uarr; at the search prompt.</p>
+    </section>
+
+    <section class="card card-outline">
+      <h2>Files and buffers</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^R</kbd></td><td>Read another file into a new buffer. <span class="badge-qol">QOL</span> — stock nano inserts it into the current one.</td></tr>
+          <tr><td class="key-cell"><kbd>M-,</kbd> / <kbd>M-.</kbd></td><td>Previous / next buffer.</td></tr>
+          <tr><td class="key-cell"><kbd>^R</kbd> then <kbd>^T</kbd></td><td>Open the file browser.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card card-outline">
+      <h2>Help</h2>
+      <table>
+        <thead><tr><th>Key</th><th>Does</th></tr></thead>
+        <tbody>
+          <tr><td class="key-cell"><kbd>^G</kbd></td><td>Full help, inside nano.</td></tr>
+          <tr><td class="key-cell"><kbd>M-X</kbd></td><td>Show or hide the two-line help bar at the bottom.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="card card-outline">
+      <h2>What the qol config changes</h2>
+      <ul class="change-list">
+        <li>Line numbers down the left margin, and a faint rule at column 80.</li>
+        <li>Syntax highlighting for roughly 180 file types.</li>
+        <li>Tab inserts four spaces rather than a tab character.</li>
+        <li>Long lines wrap on screen at word boundaries without newlines being inserted.</li>
+        <li>Reopening a file returns you to where you left off.</li>
+        <li><kbd>^S</kbd> saves.</li>
+        <li><kbd>^Z</kbd> suspends and drops you to the shell. Type <code>fg</code> to return.</li>
+      </ul>
+      <div class="callout callout-warn">
+        <span class="callout-icon">WARN</span>
+        <div>
+          <strong><kbd>^Q</kbd> is not bound to quit</strong>
+          That is deliberate. On many terminals <kbd>^Q</kbd> is flow control and can make the terminal look frozen instead of doing anything to nano. Use <kbd>^X</kbd>.
+        </div>
+      </div>
+    </section>
+
+    <section class="card card-outline">
+      <h2>About ~/.nanorc</h2>
+      <p class="note-small" style="margin-top:0;">
+        <code>install_nano.sh</code> writes a block into <code>~/.nanorc</code>
+        between <code>&gt;&gt;&gt; qol nano block &gt;&gt;&gt;</code> and
+        <code>&lt;&lt;&lt; qol nano block &lt;&lt;&lt;</code> markers, and
+        rewrites that whole block on every run.
+      </p>
+      <div class="callout callout-info">
+        <span class="callout-icon">INFO</span>
+        <div>
+          <strong>Put your own settings above the block</strong>
+          Anything below the end marker survives a rerun, but gets moved back
+          above the block the next time you run the installer. That is
+          deliberate, not a bug: it keeps the managed block contiguous and
+          safely rewritable, without you having to hunt for where your own
+          settings ended up.
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <footer>
+    <span>generated for install_nano.sh · plain-text source: docs/nano-cheatsheet.md</span>
+  </footer>
+
+</main>
+
+<!-- Theme toggle wiring -->
+<script>
+(function () {
+  var root = document.documentElement;
+  var btn = document.getElementById('theme-toggle');
+  function label() {
+    if (btn) btn.textContent = root.getAttribute('data-theme') === 'dark' ? '☀ Light' : '☾ Dark';
+  }
+  label();
+  if (btn) {
+    btn.addEventListener('click', function () {
+      var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('nano-cheatsheet-theme', next); } catch (e) {}
+      label();
+    });
+  }
+})();
+</script>
+</body>
+</html>
