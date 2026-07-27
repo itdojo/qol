@@ -77,7 +77,9 @@ test_parse_args_defaults() {
     DRY_RUN=""; ASSUME_YES=""; NO_SYNTAX=""; SET_EDITOR=""
     parse_args
     assert_eq "" "$DRY_RUN"    "no flags leaves DRY_RUN unset"
+    assert_eq "" "$ASSUME_YES" "no flags leaves ASSUME_YES unset"
     assert_eq "" "$NO_SYNTAX"  "no flags leaves NO_SYNTAX unset"
+    assert_eq "" "$SET_EDITOR" "no flags leaves SET_EDITOR unset"
 }
 
 test_parse_args_all() {

@@ -17,8 +17,6 @@
 # installs the real GNU nano via Homebrew and refuses to write a config if
 # PATH still resolves `nano` to /usr/bin/nano.
 #
-set -euo pipefail
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 BLOCK_START="# >>> qol nano block >>>"
@@ -37,43 +35,79 @@ SET_EDITOR=""
 # ---------------------------------------------------------------------------
 # Output theme
 # ---------------------------------------------------------------------------
-# Copied from install_zsh_starship.sh rather than sourced, so this script stays
-# a single self-contained file and works on macOS (linux/base_functions.sh is
-# Linux-only).
+# Copied from install_zsh_starship.sh (not sourced), so this script stays a
+# single self-contained file and works on macOS (linux/base_functions.sh is
+# Linux-only). Keep in sync with that copy if the shared theme changes.
+
+# Decide once whether to emit ANSI colors. Colors are skipped when stdout is
+# not a terminal (pipes, logs, cron) or NO_COLOR is set.
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    QOL_COLOR=1
+else
+    QOL_COLOR=""
+fi
+
+# Print a separator line the width of the terminal.
+# Usage: printline [solid|bullet|ibeam|star|plus|diamond|dentistry]
 printline() {
-    local char="─" width
-    width="$(tput cols 2>/dev/null || echo 80)"
+    local sep cols line
     case "${1:-solid}" in
-        solid)     char="─" ;;
-        bullet)    char="•" ;;
-        ibeam)     char="⌶" ;;
-        star)      char="★" ;;
-        plus)      char="+" ;;
-        diamond)   char="◆" ;;
-        dentistry) char="⚑" ;;
+        solid)     sep="─" ;;   # ─────────────
+        bullet)    sep="•" ;;   # •••••••••••••
+        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+        star)      sep="★" ;;   # ★★★★★★★★★★★★★
+        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛
+        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆
+        dentistry) sep="⏥" ;;  # ⏥⏥⏥⏥⏥⏥⏥⏥
+        *)         sep="─" ;;
     esac
-    printf '%*s\n' "$width" '' | tr ' ' "$char"
+    # Fall back to 80 columns when there is no TTY (cron, CI, pipes, etc.)
+    cols="$(tput cols 2>/dev/null)" || cols=80
+    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    printf -v line '%*s' "$cols" ''
+    printf '%s\n' "${line// /$sep}"
 }
 
+# Print styled text with no separator (usable inline via command substitution).
+# Usage: style_text "text" [normal|bold|light] [red|green|yellow|blue]
 style_text() {
-    local text="$1" weight="${2:-normal}" colour="${3:-}" seq=""
+    local text="$1" weight="${2:-normal}" color="${3:-}"
+    local weight_code color_code sgr
     case "$weight" in
-        bold)   seq="1" ;;
-        light)  seq="2" ;;
-        normal) seq="0" ;;
+        normal) weight_code=0 ;;
+        bold)   weight_code=1 ;;
+        light)  weight_code=2 ;;
+        *)      weight_code=0 ;;
     esac
-    case "$colour" in
-        red)    seq="$seq;31" ;;
-        green)  seq="$seq;32" ;;
-        yellow) seq="$seq;33" ;;
-        blue)   seq="$seq;34" ;;
+    case "$color" in
+        red)    color_code=31 ;;
+        green)  color_code=32 ;;
+        yellow) color_code=33 ;;
+        blue)   color_code=34 ;;
+        *)      color_code="" ;;
     esac
-    printf '\033[%sm%s\033[0m\n' "$seq" "$text"
+    if [[ -z "$QOL_COLOR" ]] || [[ -z "$color_code" && "$weight_code" -eq 0 ]]; then
+        printf '%s\n' "$text"
+        return 0
+    fi
+    if [[ -n "$color_code" ]]; then
+        sgr="${weight_code};${color_code}"
+    else
+        sgr="$weight_code"
+    fi
+    printf '\033[%sm%s\033[0m\n' "$sgr" "$text"
 }
 
-format_font() { style_text "$1" "${2:-normal}" "${3:-}"; }
+# Separator + styled text: the repo-standard log line.
+format_font() {
+    printline
+    style_text "$1" "${2:-bold}" "${3:-yellow}"
+}
 
-log_step() { echo; printline; style_text "$1" "${2:-bold}" "${3:-yellow}"; }
+# log_step is format_font under another name — kept as a distinct function so
+# call sites read as "this is a phase heading," not "this is generic output."
+# It must not call printline itself, or every step would print two rules.
+log_step() { format_font "$1" "${2:-bold}" "${3:-yellow}"; }
 log_info() { format_font "ℹ️   $1" bold blue; }
 log_ok()   { format_font "✅  $1" bold green; }
 log_warn() { format_font "⚠️   $1" bold yellow; }
@@ -118,5 +152,11 @@ main() {
 }
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    # set -euo pipefail lives here, not at file scope: `source` runs in the
+    # caller's shell, and tests/test-install-nano.sh sources this file under
+    # its own `set -uo pipefail`. A top-level `set -e` would leak `-e` into
+    # the test harness and let a single failing assertion kill the whole
+    # suite silently instead of reporting a FAIL line.
+    set -euo pipefail
     main "$@"
 fi
