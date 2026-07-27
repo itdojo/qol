@@ -1861,10 +1861,55 @@ test_summary_mixed_reverse() {
     rm -rf "$tmp"
 }
 
+# sync_syntax_pack runs BEFORE either confirmation prompt — the pack is not
+# part of the ~/.nanorc write, and cloning it is what makes the include globs
+# worth writing at all. So a run that declines both prompts can still have
+# just put ~180 syntax files in ~/.nano, and "Nothing was changed" was a lie
+# in exactly that case. Every other decline test passes --no-syntax, which is
+# why none of them saw it.
+test_summary_decline_after_syntax_clone() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/bin" "9.1"
+    mkdir -p "$tmp/home" "$tmp/origin"
+
+    # A local repo to clone, so the test never touches the network.
+    git -C "$tmp/origin" init -q
+    printf 'syntax "fake" "\\.fake$"\n' > "$tmp/origin/fake.nanorc"
+    git -C "$tmp/origin" add -A
+    git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -qm init
+
+    local saved_path="$PATH"
+    PATH="$tmp/bin:$saved_path"
+
+    # Empty replies — the documented default, which declines both prompts.
+    local out rc
+    out="$(printf '\n\n' | QOL_NANO_NO_INSTALL=1 QOL_NANO_FORCE_TTY=1 SHELL=/bin/zsh \
+           QOL_NANO_SYNTAX_REPO="$tmp/origin" HOME="$tmp/home" \
+           ./install_nano.sh --set-editor 2>&1)"
+    rc=$?
+
+    assert_eq "0" "$rc" "decline-after-clone: exits 0"
+    assert_ok "[ -d '$tmp/home/.nano/.git' ]" \
+        "decline-after-clone: the syntax pack really was cloned before the prompts ran"
+    assert_fail "[ -f '$tmp/home/.nanorc' ]" "decline-after-clone: no .nanorc written"
+    assert_not_contains "$out" "Nothing was changed" \
+        "decline-after-clone: does not claim nothing changed when a clone just landed"
+    assert_contains "$out" "No config was written" \
+        "decline-after-clone: says plainly that no config was written"
+    assert_contains "$out" "$tmp/home/.nano" \
+        "decline-after-clone: names the directory that did change"
+    assert_not_contains "$out" "nano is ready" \
+        "decline-after-clone: does not claim the job is done"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
 test_summary_accept_everything
 test_summary_decline_everything
 test_summary_mixed
 test_summary_mixed_reverse
+test_summary_decline_after_syntax_clone
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

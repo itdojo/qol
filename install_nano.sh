@@ -24,7 +24,10 @@ BLOCK_END="# <<< qol nano block <<<"
 
 NANORC=""
 SYNTAX_DIR=""
-SYNTAX_REPO="https://github.com/scopatz/nanorc"
+# QOL_NANO_SYNTAX_REPO is a test seam, same shape as QOL_NANO_PREFIXES and
+# QOL_NANO_BREW_PREFIXES: it lets the suite clone from a local fixture repo
+# instead of reaching the network. Unset in normal operation.
+SYNTAX_REPO="${QOL_NANO_SYNTAX_REPO:-https://github.com/scopatz/nanorc}"
 MIN_NANO_VERSION="4.0"
 
 DRY_RUN=""
@@ -300,6 +303,17 @@ $prefixes
 EOF
 }
 
+# Set to 1 by sync_syntax_pack when it actually changed something on disk —
+# a fresh clone, or a pull that moved HEAD. Read by main()'s closing summary.
+#
+# This exists because sync_syntax_pack runs BEFORE either confirmation prompt
+# (the syntax pack is not part of the ~/.nanorc write, and cloning it is what
+# makes the include globs worth writing at all). A run where both prompts were
+# declined therefore still reported "Nothing was changed" while ~/.nano had
+# just appeared, several hundred files deep. "Up to date" and every refusal
+# path leave this unset, because none of them touch the disk.
+SYNTAX_PACK_CHANGED=""
+
 # nano ships 39 syntax definitions (44 counting syntax/extra). The community
 # pack at scopatz/nanorc carries roughly 180, covering yaml variants, toml,
 # dockerfile, terraform, nginx, systemd units and the rest of what a student in
@@ -333,6 +347,7 @@ The definitions shipped with nano will still be used."
 with nano will still be used."
             return 0
         fi
+        SYNTAX_PACK_CHANGED=1
         log_ok "Cloned the community syntax pack to $SYNTAX_DIR"
         return 0
     fi
@@ -343,9 +358,16 @@ with nano will still be used."
         return 0
     fi
 
+    # HEAD is read either side of the pull rather than trusting the pull's
+    # exit status: a successful pull that was already up to date changed
+    # nothing on disk, and the closing summary must not claim otherwise.
+    local head_before head_after
+    head_before="$(git -C "$SYNTAX_DIR" rev-parse HEAD 2>/dev/null)" || head_before=""
     if ! git -C "$SYNTAX_DIR" pull --ff-only --quiet; then
         log_warn "Could not update the syntax pack; using what is already there."
     else
+        head_after="$(git -C "$SYNTAX_DIR" rev-parse HEAD 2>/dev/null)" || head_after=""
+        [[ -n "$head_before" && "$head_before" != "$head_after" ]] && SYNTAX_PACK_CHANGED=1
         log_ok "Syntax pack is up to date."
     fi
     return 0
@@ -1150,10 +1172,23 @@ main() {
     if [[ -z "$nanorc_written" && -z "$editor_written" ]]; then
         # Every prompt this run offered was declined (or every reply was
         # empty, which defaults to the same thing). Say so plainly instead
-        # of the normal "ready" summary — nothing changed, so nothing
+        # of the normal "ready" summary — nothing was configured, so nothing
         # should sound finished.
-        format_font "Nothing was changed — every prompt was declined.
+        #
+        # But "nothing was changed" is only true if the syntax pack sync
+        # didn't change anything either. That step runs BEFORE either
+        # prompt, so a declined run can still have just cloned ~180 syntax
+        # files into $SYNTAX_DIR. Claiming nothing happened would send a
+        # student looking in the wrong place if they later wanted it gone.
+        if [[ -n "$SYNTAX_PACK_CHANGED" ]]; then
+            format_font "No config was written — every prompt was declined.
+The community syntax pack was synced to $SYNTAX_DIR before those prompts, so
+that much did change; delete that directory if you don't want it.
+Re-run and answer y, or pass --yes, to actually write the config." bold yellow
+        else
+            format_font "Nothing was changed — every prompt was declined.
 Re-run without --yes and answer y, or pass --yes, to actually write the config." bold yellow
+        fi
         echo
         exit 0
     fi
