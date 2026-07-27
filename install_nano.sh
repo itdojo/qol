@@ -155,16 +155,30 @@ parse_args() {
 # field and an explicit 0 tie under those keys, so `4.0` vs `4.0.0` fell through
 # to a lexical whole-line tiebreak and reported the shorter string as older.
 #
-# The `-ne`/`-gt` numeric tests below error out on a non-numeric field, so this
-# is only safe because nano_version guarantees it emits digits and dots only
-# (or fails outright) — never a partial/garbage version string.
+# The `-ne`/`-gt` numeric tests below need pure-digit fields to avoid erroring
+# out or misparsing as arithmetic. That is enforced here, by this function's
+# own normalisation below, not by the caller — version_at_least is called with
+# the literal MIN_NANO_VERSION too, not only with nano_version output.
 version_at_least() {
     local have="$1" want="$2"
-    local h1 h2 h3 w1 w2 w3
-    IFS=. read -r h1 h2 h3 <<< "$have"
-    IFS=. read -r w1 w2 w3 <<< "$want"
+    local h1 h2 h3 w1 w2 w3 rest
+
+    # The fourth variable absorbs any remaining fields. Without it, `read`
+    # slurps the whole remainder into h3 — "9.1.2.3" would give h3="2.3", which
+    # is still digits-and-dots (so nano_version's guard passes it) but blows up
+    # the arithmetic test below with an invalid-operator error.
+    IFS=. read -r h1 h2 h3 rest <<< "$have"
+    IFS=. read -r w1 w2 w3 rest <<< "$want"
+
+    # Truncate each field at its first non-digit, so a suffix like "1-rc1"
+    # becomes 1 rather than being handed to bash arithmetic, which would parse
+    # it as a subtraction against an unset variable and silently return 1.
+    h1="${h1%%[!0-9]*}"; h2="${h2%%[!0-9]*}"; h3="${h3%%[!0-9]*}"
+    w1="${w1%%[!0-9]*}"; w2="${w2%%[!0-9]*}"; w3="${w3%%[!0-9]*}"
+
     : "${h1:=0}" "${h2:=0}" "${h3:=0}"
     : "${w1:=0}" "${w2:=0}" "${w3:=0}"
+
     if   [[ "$h1" -ne "$w1" ]]; then [[ "$h1" -gt "$w1" ]]
     elif [[ "$h2" -ne "$w2" ]]; then [[ "$h2" -gt "$w2" ]]
     else [[ "$h3" -ge "$w3" ]]

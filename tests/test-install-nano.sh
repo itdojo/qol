@@ -117,6 +117,11 @@ assert_ok   'version_at_least 4.0.0 4.0'   "4.0.0 >= 4.0 (equal, unequal depth r
 assert_ok   'version_at_least 9.1 9.1.0'   "9.1 >= 9.1.0 (equal, unequal depth)"
 assert_fail 'version_at_least 4.0 4.0.1'   "4.0 < 4.0.1"
 assert_ok   'version_at_least 4.1 4.0.9'   "4.1 >= 4.0.9 (minor beats patch)"
+assert_ok   'version_at_least 9.1.2.3 9.1'     "four-field version compares cleanly"
+assert_ok   'version_at_least 9.1.2.3 9.1.2'   "four-field version, third field ties"
+assert_fail 'version_at_least 9.1.2.3 9.2'     "four-field version, minor is older"
+assert_ok   'version_at_least 5.0-rc1 5.0'     "suffixed field truncates to its digits"
+assert_fail 'version_at_least 4.0-rc1 4.1'     "suffixed field still compares as older"
 
 echo
 echo "== nano detection =="
