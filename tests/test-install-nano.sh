@@ -424,5 +424,86 @@ set indicator" "tiny: indicator not written as a directive"
 
 test_render_nanorc
 
+echo
+echo "== managed block =="
+
+test_managed_block() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/share/nano"
+    touch "$tmp/share/nano/sh.nanorc"
+
+    local saved_rc="$NANORC" saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    NANORC="$tmp/nanorc"
+    SYNTAX_DIR="$tmp/absent"
+    QOL_NANO_PREFIXES="$tmp/share/nano"
+    # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc), not directly in this file
+    nano_help_cache=' -l, --linenumbers
+ -q, --indicator
+ -%, --stateflags'
+
+    # A pre-existing user config with a setting of their own.
+    printf 'set nowrap\n' > "$NANORC"
+
+    write_nanorc
+    local first; first="$(cat "$NANORC")"
+    assert_contains "$first" "set nowrap"     "pre-existing user line survives"
+    assert_contains "$first" "set linenumbers" "block was written"
+    assert_eq "1" "$(grep -cF "$BLOCK_START" "$NANORC")" "exactly one start marker"
+
+    # A backup must exist, since the file had content and no block.
+    assert_eq "1" "$(find "$tmp" -name 'nanorc.pre-nano.*.bak' | wc -l | tr -d ' ')" \
+        "original was backed up"
+
+    # Rerun: byte-identical, still one block.
+    write_nanorc
+    local second; second="$(cat "$NANORC")"
+    assert_eq "$first" "$second" "rerun is byte-identical"
+    assert_eq "1" "$(grep -cF "$BLOCK_START" "$NANORC")" "still exactly one start marker"
+    assert_eq "1" "$(grep -cF "$BLOCK_END" "$NANORC")"   "still exactly one end marker"
+
+    # A third run: append a line AFTER the end marker, the way a user would if
+    # they mistook the trailing edge of the file for free space.
+    #
+    # remove_managed_block only excises BLOCK_START..BLOCK_END inclusive (see
+    # its awk: skip goes 0->1 on the start marker and back 1->0 on the end
+    # marker, on the very same line as the end marker) — it does not touch
+    # anything after BLOCK_END. Because write_nanorc always re-appends the
+    # fresh block at the end of the file, a line that used to sit after the
+    # old block does NOT get dropped; it survives and is relocated to just
+    # before the new block. This matches install_zsh_starship.sh's
+    # remove_managed_block, which has the identical excise-only behaviour.
+    printf 'set mouse\n' >> "$NANORC"
+    write_nanorc
+    local third; third="$(cat "$NANORC")"
+    assert_contains "$third" "
+set mouse" "line appended after the end marker survives (relocated, not lost)"
+
+    # And it must end up BEFORE the new block, not inside/after it — otherwise
+    # this would silently reintroduce a second copy of "set mouse" forever.
+    local mouse_line block_line
+    mouse_line="$(printf '%s\n' "$third" | grep -nF 'set mouse' | cut -d: -f1)"
+    block_line="$(printf '%s\n' "$third" | grep -nF "$BLOCK_START" | cut -d: -f1)"
+    assert_ok "[ $mouse_line -lt $block_line ]" \
+        "relocated line sits before the re-appended block"
+    assert_eq "1" "$(grep -cF "$BLOCK_START" "$NANORC")" \
+        "still exactly one start marker after the stale-line rerun"
+
+    # File mode must survive: replace_file_contents keeps the inode.
+    chmod 644 "$NANORC"
+    local mode_before
+    # shellcheck disable=SC2012  # permission string only; filename is a fixed fixture path with no odd characters
+    mode_before="$(ls -l "$NANORC" | cut -c1-10)"
+    write_nanorc
+    # shellcheck disable=SC2012  # permission string only; filename is a fixed fixture path with no odd characters
+    assert_eq "$mode_before" "$(ls -l "$NANORC" | cut -c1-10)" "file mode preserved"
+
+    NANORC="$saved_rc"
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
+test_managed_block
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

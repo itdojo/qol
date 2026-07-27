@@ -371,6 +371,73 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# Writing ~/.nanorc
+# ---------------------------------------------------------------------------
+backup_file() {
+    local f="$1" backup
+    [[ -f "$f" ]] || return 0
+    backup="$f.pre-nano.$(date +%Y%m%d-%H%M%S).bak"
+    cp "$f" "$backup"
+    log_info "Backed up $f → $backup"
+}
+
+# Overwrite dst with the contents of src, keeping dst's mode, owner and inode.
+# `mv tmp dst` would be simpler but carries the temp file's permissions across —
+# mktemp creates 0600, which would silently tighten a normal 0644 .nanorc.
+replace_file_contents() {
+    local src="$1" dst="$2"
+    cat "$src" > "$dst"
+    rm -f "$src"
+}
+
+remove_managed_block() {
+    local file="$1" tmp
+    grep -qF "$BLOCK_START" "$file" || return 0
+    tmp="$(mktemp)"
+    awk -v s="$BLOCK_START" -v e="$BLOCK_END" '
+        index($0, s) { skip = 1 }
+        !skip { print }
+        index($0, e) { skip = 0 }
+    ' "$file" > "$tmp"
+    replace_file_contents "$tmp" "$file"
+}
+
+write_nanorc() {
+    log_step "Writing $NANORC..."
+    [[ -f "$NANORC" ]] || touch "$NANORC"
+
+    # Only back up a file we have not managed before. Backing up on every rerun
+    # would litter the home directory with near-identical copies.
+    if ! grep -qF "$BLOCK_START" "$NANORC" && [[ -s "$NANORC" ]]; then
+        backup_file "$NANORC"
+    fi
+
+    remove_managed_block "$NANORC"
+
+    # Strip trailing blank lines left behind by block removal. Without this,
+    # every rerun would add one more blank line above the block and the
+    # "byte-identical rerun" guarantee would fail on the second run.
+    # Only *trailing* blanks go — blank lines inside the user's own config are
+    # their spacing and must survive.
+    #
+    # Records every line in an array and remembers the index of the last
+    # non-blank one, then prints up to that index. A simpler `NF { print }`
+    # would drop every blank line in the file, including the user's own
+    # interior spacing — not just the trailing run left by block removal.
+    local tmp; tmp="$(mktemp)"
+    awk '{ lines[NR] = $0 }
+         END {
+             last = 0
+             for (i = 1; i <= NR; i++) if (lines[i] ~ /[^[:space:]]/) last = i
+             for (i = 1; i <= last; i++) print lines[i]
+         }' "$NANORC" > "$tmp"
+    replace_file_contents "$tmp" "$NANORC"
+
+    render_nanorc >> "$NANORC"
+    log_ok "Wrote the qol block to $NANORC"
+}
+
+# ---------------------------------------------------------------------------
 main() {
     parse_args "$@"
     log_ok "skeleton only"
