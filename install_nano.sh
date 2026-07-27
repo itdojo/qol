@@ -146,6 +146,39 @@ parse_args() {
 }
 
 # ---------------------------------------------------------------------------
+# nano detection
+# ---------------------------------------------------------------------------
+# True when HAVE is the same version as WANT or newer. Sorting both numerically
+# and taking the first line means WANT sorts first in exactly the cases we want
+# to accept, including the equal case. A plain string compare would put "10.0"
+# below "9.1"; `sort -V` would handle that but is not on macOS's BSD sort.
+version_at_least() {
+    local have="$1" want="$2" first
+    first="$(printf '%s\n%s\n' "$want" "$have" \
+        | sort -t. -k1,1n -k2,2n -k3,3n | head -1)"
+    [[ "$first" == "$want" ]]
+}
+
+# Print the bare version of a GNU nano binary, or fail.
+#
+# TERM=dumb and </dev/null are load-bearing, not defensive. macOS's
+# /usr/bin/nano is UW PICO, which does not understand --version and will open
+# a full-screen editor. Under TERM=dumb with stdin closed it bails out with
+# "Incomplete terminfo entry" instead. GNU nano prints its version and exits
+# before it ever calls initscr(), so it is unaffected.
+nano_version() {
+    local bin="$1" line
+    [[ -x "$bin" ]] || return 1
+    line="$(TERM=dumb "$bin" --version </dev/null 2>&1 | head -1)" || return 1
+    case "$line" in
+        *"GNU nano"*) ;;
+        *) return 1 ;;
+    esac
+    printf '%s\n' "$line" \
+        | sed -E 's/.*GNU nano,? version ([0-9][0-9.]*).*/\1/'
+}
+
+# ---------------------------------------------------------------------------
 main() {
     parse_args "$@"
     log_ok "skeleton only"

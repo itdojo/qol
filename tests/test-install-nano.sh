@@ -102,5 +102,63 @@ test_parse_args_defaults
 test_parse_args_all
 test_parse_args_short
 
+echo
+echo "== version comparison =="
+
+assert_ok   'version_at_least 9.1 4.0'   "9.1 >= 4.0"
+assert_ok   'version_at_least 4.0 4.0'   "4.0 >= 4.0 (equal)"
+assert_ok   'version_at_least 10.0 9.1'  "10.0 >= 9.1 (numeric, not lexical)"
+assert_ok   'version_at_least 5.10 5.9'  "5.10 >= 5.9 (numeric minor)"
+assert_fail 'version_at_least 2.9 4.0'   "2.9 < 4.0"
+assert_fail 'version_at_least 3.2 4.0'   "3.2 < 4.0"
+assert_ok   'version_at_least 4.0.1 4.0' "4.0.1 >= 4.0 (patch level)"
+
+echo
+echo "== nano detection =="
+
+# Build a fake nano on disk. GNU nano's real first line is exactly
+# " GNU nano, version 9.1" — leading space, comma — per src/nano.c:657.
+make_stub_nano() {
+    local dir="$1" version="$2"
+    mkdir -p "$dir"
+    cat > "$dir/nano" <<STUB
+#!/usr/bin/env bash
+case "\$1" in
+    --version) printf ' GNU nano, version %s\n' "$version"; exit 0 ;;
+    --help)    printf ' -l, --linenumbers\n -q, --indicator\n -%%, --stateflags\n'; exit 0 ;;
+esac
+exit 1
+STUB
+    chmod +x "$dir/nano"
+}
+
+# Build a fake pico: ignores --version, exits nonzero under TERM=dumb.
+make_stub_pico() {
+    local dir="$1"
+    mkdir -p "$dir"
+    cat > "$dir/nano" <<'STUB'
+#!/usr/bin/env bash
+printf 'Incomplete terminfo entry\n' >&2
+exit 1
+STUB
+    chmod +x "$dir/nano"
+}
+
+test_nano_version() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_nano "$tmp/gnu" "9.1"
+    make_stub_nano "$tmp/old" "4.8"
+    make_stub_pico "$tmp/pico"
+
+    assert_eq "9.1" "$(nano_version "$tmp/gnu/nano")"  "parses 9.1 from GNU nano"
+    assert_eq "4.8" "$(nano_version "$tmp/old/nano")"  "parses 4.8 from GNU nano"
+    assert_fail 'nano_version '"$tmp"'/pico/nano'      "pico is rejected"
+    assert_fail 'nano_version /nonexistent/nano'       "missing binary is rejected"
+
+    rm -rf "$tmp"
+}
+
+test_nano_version
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
