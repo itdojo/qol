@@ -490,6 +490,21 @@ detect_pkg_manager() {
     return 1
 }
 
+# The literal package-manager command line (no sudo prefix) for MGR. Used
+# both to actually install (see the case in install_nano_package) and, when
+# sudo turns out to be unavailable, to tell the user the exact command to
+# run themselves as root — the two must never drift apart.
+pkg_install_cmd() {
+    case "$1" in
+        brew)   printf '%s\n' "brew install nano" ;;
+        apt)    printf '%s\n' "env DEBIAN_FRONTEND=noninteractive apt-get install -y nano" ;;
+        dnf)    printf '%s\n' "dnf install -y nano" ;;
+        pacman) printf '%s\n' "pacman -S --noconfirm nano" ;;
+        apk)    printf '%s\n' "apk add nano" ;;
+        zypper) printf '%s\n' "zypper install -y nano" ;;
+    esac
+}
+
 install_nano_package() {
     local mgr
     mgr="$(detect_pkg_manager)" || {
@@ -505,7 +520,14 @@ install_nano_package() {
 
     local sudo_cmd=""
     if [[ "$mgr" != "brew" && "$(id -u)" -ne 0 ]]; then
-        sudo_cmd="sudo"
+        if command -v sudo >/dev/null 2>&1; then
+            sudo_cmd="sudo"
+        else
+            log_err "Installing nano via $mgr needs root, and sudo is not on PATH.
+Run this yourself as root:
+  $(pkg_install_cmd "$mgr")"
+            return 1
+        fi
     fi
 
     # $sudo_cmd is deliberately unquoted below: when empty it must vanish
@@ -522,6 +544,64 @@ install_nano_package() {
     esac
 }
 
+# Look for a real GNU nano already installed via Homebrew, checked directly
+# rather than via PATH (PATH is exactly the thing that's broken when this is
+# called). Only used to make the pico diagnostic below concrete instead of a
+# guess.
+#
+# QOL_NANO_BREW_PREFIXES is a test seam, same shape as syntax_include_globs's
+# QOL_NANO_PREFIXES: it lets tests point this at a fixture tree instead of
+# real system paths. Unset in normal operation.
+find_homebrew_nano() {
+    local prefixes prefix bin
+    if [[ -n "${QOL_NANO_BREW_PREFIXES:-}" ]]; then
+        prefixes="$QOL_NANO_BREW_PREFIXES"
+    else
+        prefixes="/opt/homebrew/bin
+/usr/local/bin"
+    fi
+
+    # A `read` loop, not unquoted `for prefix in $prefixes` word-splitting on
+    # IFS=$'\n': this script's own usage note (and Task 7's verification
+    # step) has people `source` it from their interactive login shell, which
+    # on current macOS defaults to zsh — and zsh does not word-split
+    # unquoted expansions the way bash does, IFS or no IFS. A `read` loop
+    # behaves the same in both.
+    while IFS= read -r prefix; do
+        [[ -n "$prefix" ]] || continue
+        bin="$prefix/nano"
+        if [[ -x "$bin" ]] && nano_version "$bin" >/dev/null 2>&1; then
+            printf '%s\n' "$bin"
+            return 0
+        fi
+    done <<EOF
+$prefixes
+EOF
+    return 1
+}
+
+# The single most likely failure a macOS student hits: /usr/bin/nano is UW
+# pico, not GNU nano. Split out of resolve_nano so the message logic —
+# "is GNU nano already installed somewhere, and if so where" — is easy to
+# follow and to test on its own.
+pico_diagnostic() {
+    local bin="$1" brew_nano rc_file
+
+    if brew_nano="$(find_homebrew_nano)"; then
+        case "$(basename "${SHELL:-/bin/bash}")" in
+            zsh)  rc_file="$HOME/.zshrc" ;;
+            bash) rc_file="$HOME/.bashrc" ;;
+            *)    rc_file="your shell's rc file" ;;
+        esac
+        log_err "'$bin' is UW pico, not GNU nano. GNU nano is already installed at
+$brew_nano — add this line to $rc_file, then open a new terminal:
+  export PATH=\"$(dirname "$brew_nano"):\$PATH\""
+    else
+        log_err "'$bin' is UW pico, not GNU nano, and GNU nano is not installed yet.
+Run this script normally (without overriding PATH) to install it."
+    fi
+}
+
 # Find a usable GNU nano on PATH, or explain precisely why there isn't one.
 resolve_nano() {
     local bin version
@@ -531,13 +611,15 @@ resolve_nano() {
     }
 
     if ! version="$(nano_version "$bin")"; then
-        log_err "'$bin' is not GNU nano."
-        if [[ "$(uname -s)" == "Darwin" && "$bin" == "/usr/bin/nano" ]]; then
-            log_err "On macOS, /usr/bin/nano is UW pico — a different editor that
-has no syntax highlighting and none of the settings this script writes.
-GNU nano is installed, but your PATH still finds /usr/bin first.
-Put your Homebrew prefix ahead of /usr/bin in your shell config, open a
-new terminal, and run this script again."
+        # Test seams: let the suite force this branch without a real
+        # /usr/bin/nano and without pretending the test host is Darwin.
+        local pico_path="${QOL_NANO_PICO_PATH:-/usr/bin/nano}"
+        local os_name="${QOL_NANO_UNAME:-$(uname -s)}"
+
+        if [[ "$os_name" == "Darwin" && "$bin" == "$pico_path" ]]; then
+            pico_diagnostic "$bin"
+        else
+            log_err "'$bin' is not GNU nano."
         fi
         return 1
     fi

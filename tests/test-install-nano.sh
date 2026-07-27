@@ -627,8 +627,12 @@ echo "== package manager detection =="
 make_stub_mgr() {
     local dir="$1" name="$2" marker="$3"
     mkdir -p "$dir"
+    # Absolute shebang, not #!/usr/bin/env bash: several tests using this
+    # stub replace PATH wholesale (no fallback to the real PATH) so that a
+    # bug can't fall through to a real package manager. `env` would then be
+    # unable to find `bash` at all.
     cat > "$dir/$name" <<STUB
-#!/usr/bin/env bash
+#!/bin/bash
 printf 'ran\n' >> "$marker"
 exit 0
 STUB
@@ -707,13 +711,130 @@ test_install_nano_package_dry_run() {
 test_install_nano_package_dry_run
 
 echo
+echo "== install_nano_package sudo decision =="
+
+# Fake `id -u`, reporting a fixed uid regardless of who actually runs the
+# suite.
+make_stub_id() {
+    local dir="$1" uid="$2"
+    mkdir -p "$dir"
+    # Absolute shebang — see make_stub_mgr's comment: these tests replace
+    # PATH wholesale, so `env` has no PATH left to find `bash` on.
+    cat > "$dir/id" <<STUB
+#!/bin/bash
+if [[ "\$1" == "-u" ]]; then
+    printf '%s\n' "$uid"
+    exit 0
+fi
+exit 1
+STUB
+    chmod +x "$dir/id"
+}
+
+# Fake sudo: records that it ran, then actually execs its arguments (which
+# resolve to the stub package manager also on PATH), so the sudo-prefixed
+# case in install_nano_package still "installs" via the harmless stub.
+make_stub_sudo() {
+    local dir="$1" marker="$2"
+    mkdir -p "$dir"
+    cat > "$dir/sudo" <<STUB
+#!/bin/bash
+printf 'ran\n' >> "$marker"
+exec "\$@"
+STUB
+    chmod +x "$dir/sudo"
+}
+
+test_install_nano_package_sudo_decision() {
+    local tmp; tmp="$(mktemp -d)"
+    local saved_path="$PATH" saved_dry_run="$DRY_RUN"
+    DRY_RUN=""   # the sudo decision is only reached past the dry-run guard
+
+    # Build every fixture directory up front, while PATH still has
+    # mkdir/chmod on it — narrowing PATH must happen only around the
+    # assertions below, one scenario at a time.
+    local root_dir="$tmp/root"
+    local dnf_marker="$tmp/root-dnf.ran" sudo_marker="$tmp/root-sudo.ran"
+    make_stub_id "$root_dir" 0
+    make_stub_mgr "$root_dir" "dnf" "$dnf_marker"
+    make_stub_sudo "$root_dir" "$sudo_marker"
+
+    local sudo_dir="$tmp/sudo"
+    local dnf_marker2="$tmp/sudo-dnf.ran" sudo_marker2="$tmp/sudo-sudo.ran"
+    make_stub_id "$sudo_dir" 501
+    make_stub_mgr "$sudo_dir" "dnf" "$dnf_marker2"
+    make_stub_sudo "$sudo_dir" "$sudo_marker2"
+
+    local nosudo_dir="$tmp/nosudo"
+    local dnf_marker3="$tmp/nosudo-dnf.ran"
+    make_stub_id "$nosudo_dir" 501
+    make_stub_mgr "$nosudo_dir" "dnf" "$dnf_marker3"
+
+    local brew_dir="$tmp/brewnosudo"
+    local brew_marker="$tmp/brewnosudo-brew.ran"
+    make_stub_id "$brew_dir" 501
+    make_stub_mgr "$brew_dir" "brew" "$brew_marker"
+
+    # --- root: never prefixed, sudo not even consulted -------------------
+    # shellcheck disable=SC2123
+    PATH="$root_dir"
+    assert_ok 'install_nano_package >/dev/null 2>&1' "root install succeeds"
+    assert_eq "present" "$([[ -f "$dnf_marker" ]] && echo present || echo absent)" \
+        "root install actually runs dnf"
+    assert_eq "absent" "$([[ -f "$sudo_marker" ]] && echo present || echo absent)" \
+        "root install never touches sudo, even though it's on PATH"
+
+    # --- non-root, sudo available: prefixed and it runs ------------------
+    # shellcheck disable=SC2123
+    PATH="$sudo_dir"
+    assert_ok 'install_nano_package >/dev/null 2>&1' \
+        "non-root install with sudo available succeeds"
+    assert_eq "present" "$([[ -f "$sudo_marker2" ]] && echo present || echo absent)" \
+        "non-root install runs through sudo"
+    assert_eq "present" "$([[ -f "$dnf_marker2" ]] && echo present || echo absent)" \
+        "sudo actually forwards to dnf"
+
+    # --- non-root, no sudo binary: clear failure, nothing attempted ------
+    # shellcheck disable=SC2123
+    PATH="$nosudo_dir"
+    local out3
+    out3="$(install_nano_package 2>&1)"
+    local status3=$?
+    assert_eq "1" "$status3" "non-root install with no sudo fails cleanly"
+    assert_contains "$out3" "dnf" "no-sudo failure names the package manager"
+    assert_contains "$out3" "dnf install -y nano" \
+        "no-sudo failure gives the literal command to run as root"
+    assert_eq "absent" "$([[ -f "$dnf_marker3" ]] && echo present || echo absent)" \
+        "no-sudo failure never attempts the install"
+
+    # --- brew: never prefixed regardless of root/sudo status -------------
+    # shellcheck disable=SC2123
+    PATH="$brew_dir"
+    assert_ok 'install_nano_package >/dev/null 2>&1' \
+        "brew install succeeds with no sudo and no root, since brew needs neither"
+    assert_eq "present" "$([[ -f "$brew_marker" ]] && echo present || echo absent)" \
+        "brew install actually runs brew"
+
+    DRY_RUN="$saved_dry_run"
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_install_nano_package_sudo_decision
+
+echo
 echo "== nano resolution =="
 
 test_resolve_nano() {
     local tmp; tmp="$(mktemp -d)"
     make_stub_nano "$tmp/good" "9.1"
     make_stub_nano "$tmp/ancient" "2.9.7"
-    make_stub_pico "$tmp/pico"
+    # Named "legacy", not "pico": a directory literally named "pico" leaks
+    # that word into any 2>&1-captured message regardless of what
+    # resolve_nano actually printed, which is exactly how an earlier version
+    # of this suite hid a false positive (see the seam-driven Darwin tests
+    # below, where the branded message is proven for real).
+    make_stub_pico "$tmp/legacy"
 
     local saved_path="$PATH"
 
@@ -723,19 +844,98 @@ test_resolve_nano() {
     PATH="$tmp/ancient:$saved_path"
     assert_fail 'resolve_nano >/dev/null 2>&1' "nano 2.9.7 is rejected (below 4.0)"
 
-    PATH="$tmp/pico:$saved_path"
-    assert_fail 'resolve_nano >/dev/null 2>&1' "pico is rejected"
+    PATH="$tmp/legacy:$saved_path"
+    assert_fail 'resolve_nano >/dev/null 2>&1' "a non-GNU nano binary is rejected"
 
-    # The pico rejection must explain itself — this is the single most likely
-    # failure a macOS student hits.
-    local msg; msg="$(PATH="$tmp/pico:$saved_path" resolve_nano 2>&1 || true)"
-    assert_contains "$msg" "pico" "pico rejection names pico"
+    # With no Darwin seam active, a non-GNU binary gets only the generic
+    # rejection. This is the control case for the seam-driven tests below:
+    # it proves "pico" cannot leak into the message from the fixture path.
+    local generic_msg
+    generic_msg="$(PATH="$tmp/legacy:$saved_path" resolve_nano 2>&1 || true)"
+    assert_not_contains "$generic_msg" "pico" \
+        "generic rejection (no Darwin seam) does not mention pico"
 
     PATH="$saved_path"
     rm -rf "$tmp"
 }
 
 test_resolve_nano
+
+echo
+echo "== macOS pico diagnostic (seam-driven) =="
+
+# resolve_nano's Darwin branch only fires when the offending binary's path
+# equals exactly /usr/bin/nano on a real Darwin host. QOL_NANO_PICO_PATH and
+# QOL_NANO_UNAME (read by resolve_nano) and QOL_NANO_BREW_PREFIXES (read by
+# find_homebrew_nano) let these tests force that branch, and choose whether a
+# real GNU nano is "found", without touching /usr/bin/nano or pretending the
+# test host is Darwin.
+test_pico_diagnostic() {
+    local tmp; tmp="$(mktemp -d)"
+    make_stub_pico "$tmp/legacy"
+    make_stub_nano "$tmp/brewbin" "9.1"
+    mkdir -p "$tmp/nobrewbin"
+
+    local saved_path="$PATH"
+    local pico_bin="$tmp/legacy/nano"
+
+    PATH="$tmp/legacy:$saved_path"
+
+    # --- brew nano present: branded message, concrete fix ---------------
+    local msg
+    msg="$(QOL_NANO_PICO_PATH="$pico_bin" QOL_NANO_UNAME="Darwin" \
+           QOL_NANO_BREW_PREFIXES="$tmp/brewbin" resolve_nano 2>&1 || true)"
+
+    assert_contains "$msg" "UW pico" \
+        "Darwin + pico-path seam produces the branded diagnostic"
+    assert_contains "$msg" "$tmp/brewbin/nano" \
+        "diagnostic names the actual Homebrew nano path found"
+    assert_contains "$msg" "export PATH=" \
+        "diagnostic gives a literal PATH fix"
+    assert_contains "$msg" "new terminal" \
+        "diagnostic tells the student to open a new terminal"
+    assert_not_contains "$msg" "not installed yet" \
+        "diagnostic does not claim nano is missing when it was found"
+
+    # --- no brew nano anywhere: honest "not installed" message ----------
+    local msg_missing
+    msg_missing="$(QOL_NANO_PICO_PATH="$pico_bin" QOL_NANO_UNAME="Darwin" \
+           QOL_NANO_BREW_PREFIXES="$tmp/nobrewbin" resolve_nano 2>&1 || true)"
+
+    assert_contains "$msg_missing" "UW pico" \
+        "diagnostic still names pico when nano is not installed"
+    assert_contains "$msg_missing" "not installed yet" \
+        "diagnostic says plainly that GNU nano isn't installed"
+    assert_not_contains "$msg_missing" "export PATH=" \
+        "diagnostic does not suggest a PATH fix with nothing to point PATH at"
+
+    # --- rc file selection follows $SHELL --------------------------------
+    local msg_zsh msg_bash msg_other
+    msg_zsh="$(SHELL=/bin/zsh QOL_NANO_PICO_PATH="$pico_bin" QOL_NANO_UNAME="Darwin" \
+           QOL_NANO_BREW_PREFIXES="$tmp/brewbin" resolve_nano 2>&1 || true)"
+    assert_contains "$msg_zsh" ".zshrc" "zsh users are told to edit .zshrc"
+
+    msg_bash="$(SHELL=/bin/bash QOL_NANO_PICO_PATH="$pico_bin" QOL_NANO_UNAME="Darwin" \
+           QOL_NANO_BREW_PREFIXES="$tmp/brewbin" resolve_nano 2>&1 || true)"
+    assert_contains "$msg_bash" ".bashrc" "bash users are told to edit .bashrc"
+
+    msg_other="$(SHELL=/bin/fish QOL_NANO_PICO_PATH="$pico_bin" QOL_NANO_UNAME="Darwin" \
+           QOL_NANO_BREW_PREFIXES="$tmp/brewbin" resolve_nano 2>&1 || true)"
+    assert_contains "$msg_other" "your shell's rc file" \
+        "unrecognised shells get a generic rc pointer instead of a wrong filename"
+
+    # --- off Darwin: the pico path alone is not enough to fire it -------
+    local msg_linux
+    msg_linux="$(QOL_NANO_PICO_PATH="$pico_bin" QOL_NANO_UNAME="Linux" \
+           QOL_NANO_BREW_PREFIXES="$tmp/brewbin" resolve_nano 2>&1 || true)"
+    assert_not_contains "$msg_linux" "UW pico" \
+        "the pico branch never fires off Darwin, even at the same path"
+
+    PATH="$saved_path"
+    rm -rf "$tmp"
+}
+
+test_pico_diagnostic
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
