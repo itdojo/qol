@@ -293,6 +293,84 @@ syntax_include_globs() {
 }
 
 # ---------------------------------------------------------------------------
+# nanorc rendering
+# ---------------------------------------------------------------------------
+# Emit one gated directive. When the running nano supports it, write it live;
+# when it does not, write it as a comment naming the version that would enable
+# it, so someone who later upgrades can see what they gained.
+#
+#   gated_directive <long-option> <rc-line> <version-that-added-it>
+gated_directive() {
+    local opt="$1" line="$2" since="$3"
+    if nano_supports "$opt"; then
+        printf '%s\n' "$line"
+    else
+        printf '# %s   # unavailable — needs nano %s (or a non-tiny build)\n' \
+            "$line" "$since"
+    fi
+}
+
+render_nanorc() {
+    local glob
+
+    # Leading newline: this block gets appended directly after the last
+    # non-blank line of the user's existing ~/.nanorc, so it must supply its
+    # own separating blank line.
+    printf '\n%s\n' "$BLOCK_START"
+    cat <<'BODY'
+# Managed by install_nano.sh — this whole block is rewritten on every rerun.
+# Put your own settings OUTSIDE the markers; anything inside is disposable.
+# Full directive reference: `man nanorc`
+
+# --- editing ---------------------------------------------------------------
+set autoindent          # keep the current indent on Enter
+set tabsize 4           # a tab is four columns wide
+set tabstospaces        # ...and typing Tab inserts spaces, not a tab character
+set trimblanks          # strip trailing whitespace from wrapped lines
+set smarthome           # Home goes to the first non-blank first, then column 1
+set matchbrackets "(<[{)>]}"   # M-] jumps to the matching bracket
+
+# --- display ---------------------------------------------------------------
+set linenumbers         # line numbers down the left margin
+set softwrap            # wrap long lines on screen without inserting newlines
+set atblanks            # ...and wrap at spaces rather than mid-word
+set constantshow        # always show the cursor position on the status bar
+set guidestripe 80      # faint vertical rule at column 80
+BODY
+
+    gated_directive indicator "set indicator" "5.0"
+    gated_directive stateflags "set stateflags" "5.3"
+
+    cat <<'BODY'
+
+# --- state -----------------------------------------------------------------
+set positionlog         # reopen a file where you left off
+set historylog          # remember search and replace history between sessions
+set multibuffer         # ^R reads a file into a new buffer instead of inline
+
+# --- keys ------------------------------------------------------------------
+# ^S to save, because everyone's fingers already do this. nano's own ^O
+# ("WriteOut") stays bound as well.
+#
+# ^Q is deliberately NOT bound to exit: it is XOFF on many terminals, and a
+# student who hits it on a serial console gets what looks like a frozen
+# machine. ^X remains the way out, and it is on the help bar at all times.
+bind ^S savefile main
+BODY
+
+    printf '\n# --- syntax highlighting ---------------------------------------------------\n'
+    printf '# Later includes win: nano matches the most recently parsed syntax first,\n'
+    printf '# so the definitions shipped with nano override the community pack.\n'
+    while IFS= read -r glob; do
+        [[ -n "$glob" ]] && printf 'include "%s"\n' "$glob"
+    done <<EOF
+$(syntax_include_globs)
+EOF
+
+    printf '%s\n' "$BLOCK_END"
+}
+
+# ---------------------------------------------------------------------------
 main() {
     parse_args "$@"
     log_ok "skeleton only"

@@ -332,5 +332,77 @@ $tmp/deb/nano-syntax-highlighting/*.nanorc" "$out" \
 
 test_syntax_include_globs
 
+echo
+echo "== nanorc rendering =="
+
+test_render_nanorc() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/share/nano" "$tmp/home/.nano"
+    touch "$tmp/share/nano/sh.nanorc" "$tmp/home/.nano/yaml.nanorc"
+
+    local saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    SYNTAX_DIR="$tmp/home/.nano"
+    QOL_NANO_PREFIXES="$tmp/share/nano"
+
+    # --- full-capability build ---
+    nano_help_cache=' -l, --linenumbers
+ -q, --indicator
+ -%, --stateflags'
+    local out; out="$(render_nanorc)"
+
+    assert_contains "$out" "$BLOCK_START" "block start marker present"
+    assert_contains "$out" "$BLOCK_END"   "block end marker present"
+    assert_contains "$out" "set linenumbers"   "core: linenumbers"
+    assert_contains "$out" "set softwrap"      "core: softwrap"
+    assert_contains "$out" "set atblanks"      "core: atblanks"
+    assert_contains "$out" "set tabsize 4"     "core: tabsize 4"
+    assert_contains "$out" "set tabstospaces"  "core: tabstospaces"
+    assert_contains "$out" "set autoindent"    "core: autoindent"
+    assert_contains "$out" "set constantshow"  "core: constantshow"
+    assert_contains "$out" "set positionlog"   "core: positionlog"
+    assert_contains "$out" "set historylog"    "core: historylog"
+    assert_contains "$out" "set multibuffer"   "core: multibuffer"
+    assert_contains "$out" "set smarthome"     "core: smarthome"
+    assert_contains "$out" "set trimblanks"    "core: trimblanks"
+    assert_contains "$out" "set guidestripe 80" "core: guidestripe"
+    assert_contains "$out" 'set matchbrackets "(<[{)>]}"' "core: matchbrackets"
+    assert_contains "$out" "bind ^S savefile main" "binding: ^S saves"
+
+    assert_contains "$out" "set indicator"  "gated: indicator written"
+    assert_contains "$out" "set stateflags" "gated: stateflags written"
+
+    # Excluded by design — these must never appear.
+    assert_not_contains "$out" "set mouse"   "excluded: mouse"
+    assert_not_contains "$out" "set minibar" "excluded: minibar"
+    assert_not_contains "$out" "set zero"    "excluded: zero"
+    assert_not_contains "$out" "set backup"  "excluded: backup"
+    assert_not_contains "$out" "titlecolor"  "excluded: interface colours"
+    assert_not_contains "$out" "bind ^Q"     "excluded: ^Q collides with XOFF"
+
+    # Include order: community pack must appear before the shipped pack.
+    local community_line shipped_line
+    community_line="$(printf '%s\n' "$out" | grep -n 'home/.nano/\*.nanorc' | cut -d: -f1)"
+    shipped_line="$(printf '%s\n' "$out" | grep -n 'share/nano/\*.nanorc' | cut -d: -f1)"
+    assert_ok "[ $community_line -lt $shipped_line ]" \
+        "community include precedes shipped include"
+
+    # --- tiny build ---
+    nano_help_cache=' -l, --linenumbers'
+    out="$(render_nanorc)"
+    assert_contains "$out" "set linenumbers" "tiny: core still written"
+    assert_not_contains "$out" "
+set indicator" "tiny: indicator not written as a directive"
+    assert_contains "$out" "# set indicator" "tiny: indicator left as a comment"
+    assert_contains "$out" "nano 5.0" "tiny: comment names the enabling version"
+    assert_contains "$out" "# set stateflags" "tiny: stateflags left as a comment"
+    assert_contains "$out" "nano 5.3" "tiny: stateflags comment names 5.3"
+
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
+test_render_nanorc
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
