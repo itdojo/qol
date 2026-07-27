@@ -218,11 +218,24 @@ nano_help_cache=""
 
 load_nano_help() {
     local bin="$1"
-    nano_help_cache="$(TERM=dumb "$bin" --help </dev/null 2>&1 || true)"
+    nano_help_cache=""
+    [[ -x "$bin" ]] || return 1
+
+    # Only output from a successful --help run is trustworthy. An earlier
+    # version merged stderr in and ignored the exit status, so a failed probe
+    # left a shell error message in the cache — and an error that echoes the
+    # binary's path back could then satisfy nano_supports.
+    nano_help_cache="$(TERM=dumb "$bin" --help </dev/null 2>/dev/null)" || {
+        nano_help_cache=""
+        return 1
+    }
 }
 
 # Match on the whole option token so that `line` cannot match `--linenumbers`.
 # The option is always followed by a comma, an equals sign, or whitespace.
+# LONGOPT is spliced into an ERE unescaped: callers must pass a hardcoded
+# literal option name, never user input or anything containing regex
+# metacharacters.
 nano_supports() {
     printf '%s\n' "$nano_help_cache" | grep -qE -- "--$1([,= ]|\$)"
 }

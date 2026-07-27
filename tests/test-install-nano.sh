@@ -226,5 +226,46 @@ STUB
 
 test_capability_probe
 
+test_capability_probe_errors() {
+    local tmp; tmp="$(mktemp -d)"
+
+    assert_fail 'load_nano_help /nonexistent/nano' \
+        "load_nano_help fails on a nonexistent path"
+    assert_fail 'nano_supports linenumbers' \
+        "no probe matches after a failed load (nonexistent path)"
+
+    mkdir -p "$tmp/notexec"
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$tmp/notexec/nano"
+    chmod -x "$tmp/notexec/nano"
+    assert_fail 'load_nano_help '"$tmp"'/notexec/nano' \
+        "load_nano_help fails on a non-executable file"
+    assert_fail 'nano_supports linenumbers' \
+        "no probe matches after a failed load (not executable)"
+
+    # Real pico, when present (macOS ships it at /usr/bin/nano). Guarded so
+    # the suite still passes on Linux, where that path is real GNU nano.
+    if [[ -x /usr/bin/nano ]] && ! /usr/bin/nano --version 2>/dev/null | grep -q 'GNU nano'; then
+        assert_fail 'load_nano_help /usr/bin/nano' \
+            "load_nano_help fails against real pico"
+        assert_fail 'nano_supports linenumbers' \
+            "no probe matches after a failed load (real pico)"
+    fi
+
+    # Staleness: a failed load after a successful one must not leave the
+    # previous binary's capabilities readable.
+    make_stub_nano "$tmp/full" "9.1"
+    load_nano_help "$tmp/full/nano"
+    assert_ok 'nano_supports linenumbers' \
+        "sanity: successful load reports capabilities"
+    assert_fail 'load_nano_help /nonexistent/nano' \
+        "subsequent load against a bad path fails"
+    assert_fail 'nano_supports linenumbers' \
+        "stale capabilities from the prior successful load are not reported"
+
+    rm -rf "$tmp"
+}
+
+test_capability_probe_errors
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
