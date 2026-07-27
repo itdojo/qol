@@ -5,7 +5,7 @@
 # Installs GNU nano (Homebrew on macOS, the distro package manager on Linux),
 # probes the resulting binary for which rc directives it supports, and writes a
 # managed block into ~/.nanorc with syntax highlighting, line numbers, sane
-# indentation and a ^S save binding.
+# indentation and a ^Z suspend binding.
 #
 # Usage:
 #   ./install_nano.sh                 # install and configure
