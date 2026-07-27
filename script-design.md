@@ -1,6 +1,8 @@
 # qol script design
 
-The house style for every shell script in this repo. `install_zsh.sh` is the living reference — when this doc and that script disagree, fix one of them, never a third way. `install_nano.sh` is the reference for scripts that take flags. `linux/base_functions.sh` is the sourced library for Linux-only scripts.
+The house style for every shell script in this repo. `install_zsh_starship.sh` is the living reference — when this doc and that script disagree, fix one of them, never a third way. `install_nano.sh` is the reference for scripts that take flags. `linux/base_functions.sh` is the sourced library for Linux-only scripts.
+
+Status notes (2026-07-27): `install_zsh.sh` was the original reference and is now deprecated — still published because people depend on it; long-term it will be removed or replaced by the starship script under the old name. Known drift: `install_zsh_starship.sh`'s section titles are not yet right-aligned — realign them the next time the script is touched.
 
 Two goals: every script **reads** the same (section layout) and **runs** the same (what the user sees on STDOUT).
 
@@ -56,7 +58,7 @@ The idempotency line is a promise, not decoration — see *Behavioral convention
 
 ## Output theme
 
-**The theme text has one source of truth: the `Pretty output` block in `install_zsh.sh`.** Copy it verbatim; never retype it, never restyle it per-script.
+**The theme text has one source of truth: the `Pretty output` block in `install_zsh_starship.sh`.** Copy it verbatim; never retype it, never restyle it per-script.
 
 - Scripts that can run on **macOS** embed the block (self-contained — `linux/base_functions.sh` is Linux-only). Mark the copy: `keep in sync with linux/base_functions.sh`.
 - Scripts under **`linux/`** source `base_functions.sh` instead (with the auto-download-from-GitHub fallback — see `linux/kernel_update.sh`).
@@ -126,7 +128,7 @@ Reference: `install_nano.sh`. Adds two sections after the theme block:
 - [ ] Header block matches the template; Targets list is honest
 - [ ] `set -eo pipefail`; Globals → theme → Safety → detection → work → Main, in that order
 - [ ] Section fences: 79-col figure-dash rules, right-aligned titles
-- [ ] Theme block copied verbatim from `install_zsh.sh` (or sourced from `base_functions.sh` if Linux-only)
+- [ ] Theme block copied verbatim from `install_zsh_starship.sh` (or sourced from `base_functions.sh` if Linux-only)
 - [ ] All user-facing output goes through `log_*` / `format_font` — no naked `echo` milestones
 - [ ] Step/ok pairs read `"...ing X..."` → `"X is installed."`; reruns narrate skips
 - [ ] Errors to stderr, actionable; warnings name what continues anyway

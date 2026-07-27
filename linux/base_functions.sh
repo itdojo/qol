@@ -9,7 +9,7 @@
 # Provides:
 #   - The repo-standard output theme: printline, style_text, format_font and
 #     the log_info / log_step / log_ok / log_warn / log_err / log_title
-#     helpers. Keep the theme in sync with install_zsh.sh (standalone).
+#     helpers. Keep the theme in sync with install_zsh_starship.sh (standalone).
 #   - fstring: back-compat wrapper around the old output API.
 #   - check_status, as_root, not_as_root, check_if_linux
 #   - apt helpers: update_repo, update_and_upgrade, install_packages
