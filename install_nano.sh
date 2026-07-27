@@ -241,6 +241,47 @@ nano_supports() {
 }
 
 # ---------------------------------------------------------------------------
+# Syntax highlighting
+# ---------------------------------------------------------------------------
+# Emit include globs in nano's parse order. Order is load-bearing:
+# begin_new_syntax() in src/rcfile.c prepends each syntax to a list, and
+# find_and_prime_applicable_syntax() in src/color.c walks that list from the
+# head and stops at the first extension match. The last file included therefore
+# wins. The definitions shipped with the nano binary are versioned alongside it
+# and are the better ones where both packs define a language, so they go last;
+# the community pack fills in the ~140 languages nano does not ship.
+#
+# Only directories that exist are emitted. nano prints a warning for an include
+# glob that matches nothing, and a warning on every launch is exactly the kind
+# of thing that makes a student distrust their editor.
+syntax_include_globs() {
+    local prefixes dir
+
+    if [[ -n "${QOL_NANO_PREFIXES:-}" ]]; then
+        prefixes="$QOL_NANO_PREFIXES"
+    else
+        prefixes="/usr/share/nano
+/usr/local/share/nano
+/opt/homebrew/share/nano
+/usr/share/nano-syntax-highlighting"
+    fi
+
+    # Community pack first — lowest precedence.
+    if [[ -d "$SYNTAX_DIR" ]]; then
+        printf '%s/*.nanorc\n' "$SYNTAX_DIR"
+    fi
+
+    # Shipped packs last — they win ties.
+    # shellcheck disable=SC2086  # deliberate word-splitting: $prefixes is a
+    # newline- or space-separated string (bash 3.2 has no arrays for this).
+    for dir in $prefixes; do
+        [[ -d "$dir" ]] || continue
+        printf '%s/*.nanorc\n' "$dir"
+        [[ -d "$dir/extra" ]] && printf '%s/extra/*.nanorc\n' "$dir"
+    done
+}
+
+# ---------------------------------------------------------------------------
 main() {
     parse_args "$@"
     log_ok "skeleton only"

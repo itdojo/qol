@@ -273,5 +273,43 @@ test_capability_probe_errors() {
 
 test_capability_probe_errors
 
+echo
+echo "== syntax include paths =="
+
+test_syntax_include_globs() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/share/nano/extra" "$tmp/home/.nano" "$tmp/deb/nano-syntax-highlighting"
+    touch "$tmp/share/nano/sh.nanorc" "$tmp/share/nano/extra/ada.nanorc"
+    touch "$tmp/home/.nano/yaml.nanorc"
+    touch "$tmp/deb/nano-syntax-highlighting/toml.nanorc"
+
+    local saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    SYNTAX_DIR="$tmp/home/.nano"
+    QOL_NANO_PREFIXES="$tmp/share/nano $tmp/deb/nano-syntax-highlighting $tmp/nonexistent"
+
+    local out; out="$(syntax_include_globs)"
+
+    assert_eq "$tmp/home/.nano/*.nanorc
+$tmp/share/nano/*.nanorc
+$tmp/share/nano/extra/*.nanorc
+$tmp/deb/nano-syntax-highlighting/*.nanorc" "$out" \
+        "community pack first, shipped last, extra included"
+
+    assert_not_contains "$out" "nonexistent" "missing directories are skipped"
+
+    # With no community clone, the ~/.nano line must not be emitted at all —
+    # nano warns on an include glob that matches nothing.
+    SYNTAX_DIR="$tmp/absent"
+    out="$(syntax_include_globs)"
+    assert_not_contains "$out" "absent" "absent community dir is skipped"
+    assert_contains "$out" "$tmp/share/nano/*.nanorc" "shipped path still present"
+
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
+test_syntax_include_globs
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
