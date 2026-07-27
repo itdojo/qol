@@ -23,9 +23,9 @@
 # NOTE: no `set -e` — this is meant to be sourced by interactive shells, where
 # `set -e` would leak into your login shell and make a failed probe fatal.
 
-# -------------------------------------------------------------------------
-#                                                             CONFIGURATION
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                 CONFIGURATION
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Probe A is a hostname, so reaching it exercises DNS, routing, and captive-portal
 # interception in a single request. Probe B is a bare IP, used only when A fails,
@@ -43,9 +43,9 @@ NETSTATUS_CACHE="${NETSTATUS_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/qol/netstatu
 NETSTATUS_TTL_QUIET="${NETSTATUS_TTL_QUIET:-30}"
 NETSTATUS_TTL_STALE="${NETSTATUS_TTL_STALE:-300}"
 
-# -------------------------------------------------------------------------
-#                                                            SSID DETECTION
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                SSID DETECTION
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Find the Wi-Fi interface name (en0, en1, ...). Anchored on the whole line so a
 # port merely containing "Wi-Fi" in its device description cannot match.
@@ -121,9 +121,9 @@ _ns_ssid() {
     esac
 }
 
-# -------------------------------------------------------------------------
-#                                                              LINK / ROUTE
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                  LINK / ROUTE
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Echo the interface carrying the default route, or nothing if there isn't one.
 # Being associated to Wi-Fi does not mean Wi-Fi is carrying your traffic: with a
@@ -152,9 +152,9 @@ _ns_iface_is_wifi() {
     esac
 }
 
-# -------------------------------------------------------------------------
-#                                                              REACHABILITY
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                  REACHABILITY
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Echo the HTTP status code. curl prints "000" when the request never completed,
 # so callers treat 000 and empty identically.
@@ -222,9 +222,9 @@ _ns_reachability() {
     fi
 }
 
-# -------------------------------------------------------------------------
-#                                                                 RENDERING
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                     RENDERING
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Echo the Wi-Fi label: the SSID when known, a bare marker when the OS withholds
 # it, nothing at all when not associated.
@@ -273,9 +273,9 @@ _ns_render() {
     printf ' %s   %s\n' "$left" "$right"
 }
 
-# -------------------------------------------------------------------------
-#                                                                     CACHE
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                         CACHE
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Probe, write the result to the cache, and echo it.
 # Cache format: line 1 is epoch seconds, line 2 is the rendered text.
@@ -316,9 +316,9 @@ _ns_cache_read() {
     return 0
 }
 
-# -------------------------------------------------------------------------
-#                                                                    PUBLIC
-# -------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+#                                                                        PUBLIC
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 netstatus() {
     local age now

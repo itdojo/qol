@@ -35,9 +35,9 @@ ASSUME_YES=""
 NO_SYNTAX=""
 SET_EDITOR=""
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Output theme
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Copied from install_zsh_starship.sh (not sourced), so this script stays a
 # single self-contained file and works on macOS (linux/base_functions.sh is
 # Linux-only). Keep in sync with that copy if the shared theme changes.
@@ -55,14 +55,14 @@ fi
 printline() {
     local sep cols line
     case "${1:-solid}" in
-        solid)     sep="─" ;;   # ─────────────
-        bullet)    sep="•" ;;   # •••••••••••••
-        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
-        star)      sep="★" ;;   # ★★★★★★★★★★★★★
-        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛
-        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆
-        dentistry) sep="⏥" ;;  # ⏥⏥⏥⏥⏥⏥⏥⏥
-        *)         sep="─" ;;
+        solid)     sep="─" ;;   # ───────────────
+        bullet)    sep="•" ;;   # •••••••••••••••
+        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+        star)      sep="★" ;;   # ★★★★★★★★★★
+        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛
+        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆◆◆
+        dentistry) sep="⏥" ;;   # ⏥⏥⏥⏥⏥⏥⏥⏥⏥⏥⏥⏥
+        *)         sep="─" ;;   # ───────────────
     esac
     # Fall back to 80 columns when there is no TTY (cron, CI, pipes, etc.)
     cols="$(tput cols 2>/dev/null)" || cols=80
@@ -116,9 +116,9 @@ log_ok()   { format_font "✅  $1" bold green; }
 log_warn() { format_font "⚠️   $1" bold yellow; }
 log_err()  { format_font "❌  $1" bold red >&2; }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Arguments
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 usage() {
     cat <<'USAGE'
 install_nano.sh — set up GNU nano with syntax highlighting and sane defaults.
@@ -156,9 +156,9 @@ init_paths() {
     [[ -n "$SYNTAX_DIR" ]] || SYNTAX_DIR="$HOME/.nano"
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # nano detection
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # True when HAVE is the same version as WANT or newer.
 #
 # Compares field by field rather than sorting. An earlier version piped both
@@ -251,9 +251,9 @@ nano_supports() {
     printf '%s\n' "$nano_help_cache" | grep -qE -- "--$1([,= ]|\$)"
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Syntax highlighting
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Emit include globs in nano's parse order. Order is load-bearing:
 # begin_new_syntax() in src/rcfile.c prepends each syntax to a list, and
 # find_and_prime_applicable_syntax() in src/color.c walks that list from the
@@ -373,9 +373,9 @@ with nano will still be used."
     return 0
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # nanorc rendering
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Emit one gated directive. When the running nano supports it, write it live;
 # when it does not, write it as a comment naming the version that would enable
 # it, so someone who later upgrades can see what they gained.
@@ -482,9 +482,9 @@ EOF
     printf '%s\n' "$BLOCK_END"
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Writing ~/.nanorc
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # LAST_BACKUP_PATH is a result-out-of-band global, same convention as
 # nano_help_cache: it lets a caller that goes on to fail on a *later* step
 # clean up the backup this function just took, rather than leaving a stray
@@ -740,9 +740,9 @@ write_nanorc() {
     log_ok "Wrote the qol block to $NANORC"
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Installing nano
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 detect_pkg_manager() {
     local mgr
     for mgr in brew apt-get dnf pacman apk zypper; do
@@ -934,9 +934,9 @@ Upgrade nano and run this script again."
     printf '%s\n' "$bin"
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Optional: make nano the default editor
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Off unless asked for. Setting EDITOR touches a second file and changes what
 # happens when `git commit` or `crontab -e` opens — a surprise nobody asked for
 # when all they wanted was syntax highlighting.
@@ -1043,9 +1043,9 @@ $rcs
 EOF
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Confirmation
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Ask before a state-changing step. Three rules, in priority order:
 #   1. --yes (ASSUME_YES) skips the prompt entirely and proceeds.
 #   2. A non-tty stdin (piped, redirected, cron, this test suite) skips the
@@ -1083,7 +1083,7 @@ confirm() {
     esac
 }
 
-# ---------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 main() {
     parse_args "$@"
     init_paths

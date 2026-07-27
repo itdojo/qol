@@ -63,16 +63,16 @@ source "$BASE_FUNCTIONS"
 command -v log_step >/dev/null 2>&1 \
   || { echo "❌  base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Ubuntu codenames currently supported by the cappelikan/ppa mainline tool
 # (as of April 2026). Update this list when Ubuntu adds/drops a release.
 # https://launchpad.net/~cappelikan/+archive/ubuntu/ppa
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 SUPPORTED_UBUNTU_CODENAMES=("jammy" "noble" "plucky" "questing" "resolute")
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: is this codename in the given list?
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 is_supported_codename() {
   local needle="$1"
   shift
@@ -83,11 +83,11 @@ is_supported_codename() {
   return 1
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: detect Raspberry Pi reliably and echo the model string on stdout.
 # Prefers /proc/device-tree/model (canonical on modern 64-bit Pi OS), falls
 # back to /proc/cpuinfo "Model" line. Returns non-zero if not a Pi.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 detect_raspberry_pi() {
   if [ -r /proc/device-tree/model ] && grep -qa "Raspberry Pi" /proc/device-tree/model 2>/dev/null; then
     tr -d '\0' </proc/device-tree/model
@@ -100,13 +100,13 @@ detect_raspberry_pi() {
   return 1
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: report whether a kernel update is staged for the next reboot.
 # uname -r reflects the RUNNING kernel and does not change without a reboot,
 # so we compare it against the newest installed kernel modules directory
 # under /usr/lib/modules (which IS updated immediately when a new kernel is
 # installed). /boot/vmlinuz-* is used as a fallback.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 report_kernel_status() {
   local running latest
   running="$(uname -r)"
@@ -138,9 +138,9 @@ report_kernel_status() {
   echo ""
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Pre-flight
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 clear          # Clear the screen
 as_root        # Confirm running as root
 check_if_linux # Confirm running on Linux
@@ -152,9 +152,9 @@ if ! command -v needrestart >/dev/null; then
   install_packages needrestart
 fi
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Detect distro
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_step "Gathering Linux release info..."
 
 if [ -f /etc/os-release ]; then
@@ -182,9 +182,9 @@ fi
 running_kernel="$(uname -r)"
 printf "%s\n" "🧬  Currently running kernel: $(style_text "$running_kernel" bold green)"
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Branch on platform
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 if [ -n "$pi_model" ]; then
   # ---- Raspberry Pi -------------------------------------------------------
   # Standard apt path is the safe default. rpi-update is opt-in.
@@ -291,13 +291,13 @@ else
   fi
 fi
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Report whether a kernel update is staged for next reboot
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 report_kernel_status
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Completion
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_title "🏁  KERNEL UPGRADE COMPLETE  🏁"
 echo ""

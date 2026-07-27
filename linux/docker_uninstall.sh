@@ -17,7 +17,7 @@
 #
 # Expects the repo-standard output helpers (log_*, style_text) to be loaded;
 # when run directly it sources linux/base_functions.sh itself.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 uninstall_docker() {
     if ! command -v apt-get >/dev/null 2>&1; then

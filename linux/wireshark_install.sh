@@ -13,7 +13,7 @@
 # Usage: sudo ./wireshark_install.sh
 #
 # Relies on base_functions.sh (auto-downloaded from GitHub if missing).
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 SCRIPT_DIR="$(dirname "$(realpath "$0")")"
 BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh"
@@ -43,9 +43,9 @@ if ! command -v apt-get >/dev/null 2>&1; then
     exit 1
 fi
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Detect distro
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_step "Gathering Linux release info..."
 if [ -f /etc/os-release ]; then
     # shellcheck disable=SC1091
@@ -56,9 +56,9 @@ else
     exit 1
 fi
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # PPA (Ubuntu family only)
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 if [ "${ID:-}" = "ubuntu" ] || [[ "${ID_LIKE:-}" == *ubuntu* ]]; then
     log_step "Adding the wireshark-dev/stable PPA..."
     if ! command -v add-apt-repository >/dev/null 2>&1; then
@@ -72,9 +72,9 @@ fi
 
 update_repo
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Install
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Answer the "should non-superusers be able to capture packets?" prompt ahead
 # of time so apt never blocks waiting for input.
 log_step "Preseeding Wireshark capture permissions (non-root capture: yes)..."
@@ -82,9 +82,9 @@ echo "wireshark-common wireshark-common/install-setuid boolean true" | debconf-s
 
 install_packages wireshark tshark
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Let the invoking (non-root) user capture without sudo
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 capture_user="${SUDO_USER:-}"
 if [ -n "$capture_user" ] && [ "$capture_user" != "root" ] && id "$capture_user" >/dev/null 2>&1; then
     log_step "Adding $capture_user to the wireshark group..."

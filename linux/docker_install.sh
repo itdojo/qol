@@ -62,11 +62,11 @@ source "$BASE_FUNCTIONS"
 command -v log_step >/dev/null 2>&1 \
   || { echo "❌  base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Docker's officially supported Ubuntu codenames (as of May 2026).
 # Update this list when Docker adds/drops a release.
 # https://docs.docker.com/engine/install/ubuntu/
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 SUPPORTED_UBUNTU_CODENAMES=("jammy" "noble" "questing" "resolute")
 
 # Debian releases supported by Docker's repo (download.docker.com/linux/debian).
@@ -75,9 +75,9 @@ SUPPORTED_DEBIAN_CODENAMES=("bookworm" "trixie")
 # Codename to use for Kali (rolling, tracks Debian testing/stable).
 KALI_DEBIAN_CODENAME="trixie"
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: is this codename in the given list?
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 is_supported_codename() {
   local needle="$1"
   shift
@@ -88,10 +88,10 @@ is_supported_codename() {
   return 1
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: remove distro-provided Docker packages that conflict with docker-ce.
 # Docker's docs explicitly recommend this on Ubuntu 24.04+ and Debian 12+.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 remove_conflicting_packages() {
   log_step "Removing conflicting distro Docker packages..."
   local pkgs=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
@@ -100,10 +100,10 @@ remove_conflicting_packages() {
   echo "Conflicting package cleanup done."
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: post-install check.
 # Returns 0 on success, non-zero on failure (but does NOT exit the script).
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 docker_smoke_test() {
   log_step "Running Docker smoke test (hello-world)..."
   if docker run --rm hello-world >/dev/null 2>&1; then
@@ -116,7 +116,7 @@ docker_smoke_test() {
   fi
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: make sure the kernel modules Docker's default bridge network needs
 # are loaded, and persist them across reboots.
 #
@@ -130,7 +130,7 @@ docker_smoke_test() {
 # if we're on a stock kernel, we try the linux-modules-extra package that ships
 # them. This never exits on its own — the authoritative pass/fail is the
 # is-active check in enable_and_start_docker().
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 DOCKER_KERNEL_MODULES=(overlay br_netfilter nf_conntrack nf_nat nf_tables
                        nft_compat nft_chain_nat xt_conntrack xt_addrtype
                        xt_MASQUERADE xt_nat iptable_nat iptable_filter ip_tables)
@@ -170,12 +170,12 @@ ensure_docker_kernel_modules() {
   fi
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: merge "firewall-backend": "nftables" into /etc/docker/daemon.json
 # without clobbering an existing config. Returns:
 #   0 = key is set (written now or already present)
 #   2 = a daemon.json exists that we couldn't safely merge (no jq)
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 enable_nftables_backend() {
   local f=/etc/docker/daemon.json
   mkdir -p /etc/docker
@@ -192,7 +192,7 @@ enable_nftables_backend() {
   return 2
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: pick Docker's firewall backend. Docker's default path uses the legacy
 # iptables MASQUERADE target (xt_MASQUERADE). Some vendor/embedded kernels
 # (e.g. Gateworks Venice, some VPS images) omit CONFIG_NETFILTER_XT_TARGET_
@@ -200,7 +200,7 @@ enable_nftables_backend() {
 # nft_masq). Docker >= 29 can use those directly via "firewall-backend":
 # "nftables", so on such a kernel we switch backends instead of dying.
 # Only acts when xt_MASQUERADE is genuinely unavailable; otherwise no-op.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 ensure_docker_firewall_backend() {
   command -v docker >/dev/null 2>&1 || return 0
   command -v modprobe >/dev/null 2>&1 || return 0
@@ -230,14 +230,14 @@ ensure_docker_firewall_backend() {
   fi
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: enable + start docker.service, then VERIFY the daemon is actually
 # running. `systemctl enable --now` (and get.docker.com) can return 0 while the
 # daemon dies immediately afterward, so we trust `is-active`, not $?. A dead
 # daemon is a failed install — this exits the script and dumps the daemon log
 # so the real cause (usually a kernel/netfilter or storage-driver issue, not a
 # packaging problem) is visible instead of buried under a green SUCCESS.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 enable_and_start_docker() {
   ensure_docker_kernel_modules
   ensure_docker_firewall_backend
@@ -264,18 +264,18 @@ enable_and_start_docker() {
   exit 1
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Pre-flight
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 clear          # Clear the screen
 as_root        # Confirm running as root (before any prompts or apt work)
 check_if_linux # Confirm running on Linux
 
 log_title "🐳  DOCKER INSTALLER FOR LINUX  -  v.2026-07"
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Already-installed check
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 if command -v docker >/dev/null; then
   log_info "Docker is already installed ($(docker --version))."
   read -r -p "Do you want to continue with the installation? [y/N]: " confirm
@@ -296,9 +296,9 @@ fi
 command -v curl >/dev/null || install_packages curl
 command -v needrestart >/dev/null || install_packages needrestart
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Detect distro
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_step "Gathering Linux release info..."
 
 # Determine if this is a Raspberry Pi 🥧
@@ -323,9 +323,9 @@ fi
 # prefer UBUNTU_CODENAME when present.
 APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Branch on platform
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 if [ -n "$model" ]; then
   # ---- Raspberry Pi -------------------------------------------------------
   log_step "Installing Docker for $model..."
@@ -470,9 +470,9 @@ else
   fi
 fi
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Add user(s) to docker group
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Build a deduplicated list of candidate users to add. Skip empty values
 # (happens when running as a true root login where SUDO_USER isn't set) and
 # skip "root" (root doesn't need to be in the docker group).
@@ -503,9 +503,9 @@ else
   printf "This will start a new shell with the docker group applied.\n"
 fi
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Smoke test (non-fatal; informational)
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 docker_smoke_test || true
 
 log_title "🐳  DOCKER INSTALLER COMPLETE"

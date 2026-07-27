@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # base_functions.sh
 #
 # Shared helper library for the scripts in this repo.
@@ -20,11 +20,11 @@
 # be sourced by scripts, that terminates the *calling* script. That is
 # intentional — but do not source this into an interactive shell and then
 # call e.g. `as_root` unless you're prepared to have the shell exit.
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Pretty output — repo-standard theme
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Decide once, at source time, whether to emit ANSI colors. Colors are
 # skipped when stdout is not a terminal (pipes, logs, cron) or NO_COLOR is
@@ -40,14 +40,14 @@ fi
 printline() {
     local sep cols line
     case "${1:-solid}" in
-        solid)     sep="─" ;;   # ─────────────
-        bullet)    sep="•" ;;   # •••••••••••••
-        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
-        star)      sep="★" ;;   # ★★★★★★★★★★★★★
-        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛✛✛
-        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆
-        dentistry) sep="⏥" ;;  # ⏥⏥⏥⏥⏥⏥⏥⏥
-        *)         sep="─" ;;
+        solid)     sep="─" ;;   # ───────────────
+        bullet)    sep="•" ;;   # •••••••••••••••
+        ibeam)     sep="⌶" ;;   # ⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶⌶
+        star)      sep="★" ;;   # ★★★★★★★★★★
+        plus)      sep="✛" ;;   # ✛✛✛✛✛✛✛✛✛✛✛
+        diamond)   sep="◆" ;;   # ◆◆◆◆◆◆◆◆◆◆◆◆◆◆◆
+        dentistry) sep="⏥" ;;   # ⏥⏥⏥⏥⏥⏥⏥⏥⏥⏥⏥⏥
+        *)         sep="─" ;;   # ───────────────
     esac
     # Fall back to 80 columns when there is no TTY (cron, CI, pipes, etc.)
     cols="$(tput cols 2>/dev/null)" || cols=80
@@ -107,11 +107,11 @@ log_title() {
     printline dentistry
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Back-compat: the old fstring API. New scripts should call the log_*
 # helpers directly. The old "emphasis" argument is no longer supported.
 # Usage: fstring "text" [type] [weight] [color]
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 fstring() {
     local text="$1" text_type="${2:-normal}" weight="${3:-normal}" color="${4:-}"
     case "$text_type" in
@@ -124,9 +124,9 @@ fstring() {
     esac
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Status / safety helpers
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Report the result of the previous command.
 # Usage: some_command; check_status "Description of step" $?
@@ -176,9 +176,9 @@ check_if_linux() {
     fi
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # apt helpers (Debian/Ubuntu-family)
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Refresh the package lists.
 update_repo() {
@@ -206,9 +206,9 @@ install_packages() {
     check_status "Installing $*" "$rc"
 }
 
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Environment
-# ----------------------------------------------------------------------------
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 
 # Install the CTRL-C trap for any script that sources this library.
 trap handle_ctrl_c INT
