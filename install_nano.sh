@@ -148,15 +148,27 @@ parse_args() {
 # ---------------------------------------------------------------------------
 # nano detection
 # ---------------------------------------------------------------------------
-# True when HAVE is the same version as WANT or newer. Sorting both numerically
-# and taking the first line means WANT sorts first in exactly the cases we want
-# to accept, including the equal case. A plain string compare would put "10.0"
-# below "9.1"; `sort -V` would handle that but is not on macOS's BSD sort.
+# True when HAVE is the same version as WANT or newer.
+#
+# Compares field by field rather than sorting. An earlier version piped both
+# through `sort -t. -k1,1n -k2,2n -k3,3n` and took the first line, but a missing
+# field and an explicit 0 tie under those keys, so `4.0` vs `4.0.0` fell through
+# to a lexical whole-line tiebreak and reported the shorter string as older.
+#
+# The `-ne`/`-gt` numeric tests below error out on a non-numeric field, so this
+# is only safe because nano_version guarantees it emits digits and dots only
+# (or fails outright) — never a partial/garbage version string.
 version_at_least() {
-    local have="$1" want="$2" first
-    first="$(printf '%s\n%s\n' "$want" "$have" \
-        | sort -t. -k1,1n -k2,2n -k3,3n | head -1)"
-    [[ "$first" == "$want" ]]
+    local have="$1" want="$2"
+    local h1 h2 h3 w1 w2 w3
+    IFS=. read -r h1 h2 h3 <<< "$have"
+    IFS=. read -r w1 w2 w3 <<< "$want"
+    : "${h1:=0}" "${h2:=0}" "${h3:=0}"
+    : "${w1:=0}" "${w2:=0}" "${w3:=0}"
+    if   [[ "$h1" -ne "$w1" ]]; then [[ "$h1" -gt "$w1" ]]
+    elif [[ "$h2" -ne "$w2" ]]; then [[ "$h2" -gt "$w2" ]]
+    else [[ "$h3" -ge "$w3" ]]
+    fi
 }
 
 # Print the bare version of a GNU nano binary, or fail.
@@ -167,15 +179,20 @@ version_at_least() {
 # "Incomplete terminfo entry" instead. GNU nano prints its version and exits
 # before it ever calls initscr(), so it is unaffected.
 nano_version() {
-    local bin="$1" line
+    local bin="$1" line version
     [[ -x "$bin" ]] || return 1
     line="$(TERM=dumb "$bin" --version </dev/null 2>&1 | head -1)" || return 1
     case "$line" in
         *"GNU nano"*) ;;
         *) return 1 ;;
     esac
-    printf '%s\n' "$line" \
-        | sed -E 's/.*GNU nano,? version ([0-9][0-9.]*).*/\1/'
+    version="$(printf '%s\n' "$line" \
+        | sed -E 's/.*GNU nano,? version ([0-9][0-9.]*).*/\1/')"
+    # If the version group didn't match, sed echoes the line unchanged. Reject
+    # anything that isn't purely digits and dots so version_at_least's numeric
+    # comparisons never see a partial or garbage version string.
+    [[ "$version" =~ ^[0-9][0-9.]*$ ]] || return 1
+    printf '%s\n' "$version"
 }
 
 # ---------------------------------------------------------------------------

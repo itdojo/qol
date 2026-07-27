@@ -112,6 +112,11 @@ assert_ok   'version_at_least 5.10 5.9'  "5.10 >= 5.9 (numeric minor)"
 assert_fail 'version_at_least 2.9 4.0'   "2.9 < 4.0"
 assert_fail 'version_at_least 3.2 4.0'   "3.2 < 4.0"
 assert_ok   'version_at_least 4.0.1 4.0' "4.0.1 >= 4.0 (patch level)"
+assert_ok   'version_at_least 4.0 4.0.0'   "4.0 >= 4.0.0 (equal, unequal depth)"
+assert_ok   'version_at_least 4.0.0 4.0'   "4.0.0 >= 4.0 (equal, unequal depth reversed)"
+assert_ok   'version_at_least 9.1 9.1.0'   "9.1 >= 9.1.0 (equal, unequal depth)"
+assert_fail 'version_at_least 4.0 4.0.1'   "4.0 < 4.0.1"
+assert_ok   'version_at_least 4.1 4.0.9'   "4.1 >= 4.0.9 (minor beats patch)"
 
 echo
 echo "== nano detection =="
@@ -154,6 +159,22 @@ test_nano_version() {
     assert_eq "4.8" "$(nano_version "$tmp/old/nano")"  "parses 4.8 from GNU nano"
     assert_fail 'nano_version '"$tmp"'/pico/nano'      "pico is rejected"
     assert_fail 'nano_version /nonexistent/nano'       "missing binary is rejected"
+
+    # A stub that claims "GNU nano" but prints no version number. The sed
+    # pattern in nano_version won't match, so without the post-match regex
+    # guard it would echo the raw line back and return 0. One-off, unlike
+    # make_stub_nano/make_stub_pico, so it's defined inline rather than
+    # promoted to a top-level helper.
+    mkdir -p "$tmp/noversion"
+    cat > "$tmp/noversion/nano" <<'STUB'
+#!/usr/bin/env bash
+case "$1" in
+    --version) printf ' GNU nano\n'; exit 0 ;;
+esac
+exit 1
+STUB
+    chmod +x "$tmp/noversion/nano"
+    assert_fail 'nano_version '"$tmp"'/noversion/nano' "GNU nano with no version number is rejected"
 
     rm -rf "$tmp"
 }
