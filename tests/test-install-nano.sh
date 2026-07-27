@@ -969,5 +969,146 @@ test_pico_diagnostic() {
 
 test_pico_diagnostic
 
+echo
+echo "== syntax pack sync =="
+
+test_sync_syntax_pack() {
+    local tmp; tmp="$(mktemp -d)"
+    local saved_dir="$SYNTAX_DIR" saved_repo="$SYNTAX_REPO"
+    local saved_nosyn="$NO_SYNTAX" saved_dry="$DRY_RUN"
+
+    # Build a local git repo to clone, so the test never touches the network.
+    mkdir -p "$tmp/origin"
+    git -C "$tmp/origin" init -q
+    printf 'syntax "fake" "\\.fake$"\n' > "$tmp/origin/fake.nanorc"
+    git -C "$tmp/origin" add -A
+    git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -qm init
+
+    SYNTAX_DIR="$tmp/clone"
+    SYNTAX_REPO="$tmp/origin"
+    NO_SYNTAX=""; DRY_RUN=""
+
+    local rc
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_ok "[ -f '$tmp/clone/fake.nanorc' ]" "first run clones the pack"
+    assert_eq "0" "$rc" "first-run clone returns success"
+
+    # Rerun on a clean clone must succeed and leave the file in place.
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_ok "[ -f '$tmp/clone/fake.nanorc' ]" "rerun on clean clone succeeds"
+    assert_eq "0" "$rc" "clean-clone rerun returns success"
+
+    # Give origin a new commit so a real pull would actually change something.
+    # Without this, "would a pull have happened" is untestable: an unmodified
+    # origin makes `git pull --ff-only` a no-op whether or not the dirty guard
+    # exists, so the assertion below would pass even with the guard deleted.
+    printf 'syntax "fake" "\\.fake$"\nupstream update\n' > "$tmp/origin/fake.nanorc"
+    git -C "$tmp/origin" add -A
+    git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -qm upstream
+
+    # A dirty clone must be left alone, not clobbered — and must not silently
+    # fetch the upstream change either.
+    printf 'local edit\n' >> "$tmp/clone/fake.nanorc"
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_contains "$(cat "$tmp/clone/fake.nanorc")" "local edit" \
+        "dirty clone is not overwritten"
+    assert_not_contains "$(cat "$tmp/clone/fake.nanorc")" "upstream update" \
+        "dirty clone does not silently pull upstream changes"
+    assert_eq "0" "$rc" "dirty-clone refusal returns success"
+
+    # The two assertions above would also pass with our dirty-check deleted
+    # entirely, because `git pull --ff-only` refuses on its own to check out a
+    # fast-forward that would clobber a locally modified tracked file — that
+    # was verified by hand before trusting this test. To prove our own check
+    # (git status --porcelain, read before git is ever invoked to pull) is
+    # what is actually firing, repeat with a kind of dirt git itself does NOT
+    # object to: an untracked file that doesn't collide with anything the
+    # upstream commit touches. Start from a clean clone caught up to origin.
+    git -C "$tmp/clone" reset -q --hard
+    git -C "$tmp/clone" pull --ff-only --quiet
+    printf 'scratch\n' > "$tmp/clone/scratch.txt"
+    local head_before; head_before="$(git -C "$tmp/clone" rev-parse HEAD)"
+
+    printf 'syntax "fake" "\\.fake$"\nupstream update\nsecond update\n' \
+        > "$tmp/origin/fake.nanorc"
+    git -C "$tmp/origin" add -A
+    git -C "$tmp/origin" -c user.email=t@t -c user.name=t commit -qm upstream2
+
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    local head_after; head_after="$(git -C "$tmp/clone" rev-parse HEAD)"
+    assert_eq "$head_before" "$head_after" \
+        "an untracked scratch file blocks the pull too, though bare git would allow it"
+    assert_not_contains "$(cat "$tmp/clone/fake.nanorc")" "second update" \
+        "untracked-dirty clone does not silently pull upstream changes"
+    assert_eq "0" "$rc" "untracked-dirty-clone refusal returns success"
+
+    # A SYNTAX_DIR that exists but was never a git clone (e.g. hand-created,
+    # or left over from before this script existed) must be left completely
+    # alone rather than folded into a clone. Content-bearing case first: this
+    # documents that existing files survive, though it does not by itself
+    # prove our own check fired — `git clone` already refuses on its own to
+    # clone into a non-empty directory, so this assertion would still pass
+    # with our check deleted.
+    NO_SYNTAX=""; DRY_RUN=""
+    mkdir -p "$tmp/notgit"
+    printf 'do not touch\n' > "$tmp/notgit/keep.txt"
+    SYNTAX_DIR="$tmp/notgit"
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_ok "[ -f '$tmp/notgit/keep.txt' ]" \
+        "existing non-git SYNTAX_DIR is left untouched"
+    assert_eq "0" "$rc" "non-git SYNTAX_DIR refusal returns success"
+
+    # The actual proof: an *empty* pre-existing directory. `git clone` has no
+    # objection to cloning into an empty directory, so only our own
+    # not-a-.git-dir check stands between this and silently becoming a clone.
+    mkdir -p "$tmp/notgit-empty"
+    SYNTAX_DIR="$tmp/notgit-empty"
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_fail "[ -d '$tmp/notgit-empty/.git' ]" \
+        "an empty pre-existing SYNTAX_DIR is not turned into a clone either"
+    assert_eq "0" "$rc" "empty non-git SYNTAX_DIR refusal returns success"
+
+    # A missing git binary must degrade gracefully — not error out, not fall
+    # through to try running git anyway. PATH is narrowed to a directory that
+    # has every tool sync_syntax_pack's own logging needs (tput, for the
+    # separator rule) but no git, so `command -v git` genuinely fails rather
+    # than the test accidentally proving nothing because git was still found
+    # elsewhere on PATH.
+    local nogit_bin="$tmp/nogit-bin" saved_path="$PATH"
+    mkdir -p "$nogit_bin"
+    ln -s "$(command -v tput)" "$nogit_bin/tput"
+    SYNTAX_DIR="$tmp/nogit"
+    PATH="$nogit_bin"
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    PATH="$saved_path"
+    assert_fail "[ -e '$tmp/nogit' ]" "no git on PATH creates nothing"
+    assert_eq "0" "$rc" "missing-git refusal returns success"
+
+    # A clone that fails outright (bad remote) must warn and move on rather
+    # than aborting the whole install.
+    SYNTAX_DIR="$tmp/failedclone"
+    SYNTAX_REPO="$tmp/does-not-exist"
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_eq "0" "$rc" "failed clone returns success"
+
+    # --no-syntax must not create anything.
+    SYNTAX_DIR="$tmp/skipped"; SYNTAX_REPO="$tmp/origin"; NO_SYNTAX=1
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_fail "[ -d '$tmp/skipped' ]" "--no-syntax creates nothing"
+    assert_eq "0" "$rc" "--no-syntax returns success"
+
+    # --dry-run must not create anything either.
+    SYNTAX_DIR="$tmp/dry"; NO_SYNTAX=""; DRY_RUN=1
+    sync_syntax_pack >/dev/null 2>&1; rc=$?
+    assert_fail "[ -d '$tmp/dry' ]" "--dry-run creates nothing"
+    assert_eq "0" "$rc" "--dry-run returns success"
+
+    SYNTAX_DIR="$saved_dir"; SYNTAX_REPO="$saved_repo"
+    NO_SYNTAX="$saved_nosyn"; DRY_RUN="$saved_dry"
+    rm -rf "$tmp"
+}
+
+test_sync_syntax_pack
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]

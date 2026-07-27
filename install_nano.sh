@@ -292,6 +292,57 @@ $prefixes
 EOF
 }
 
+# nano ships 39 syntax definitions (44 counting syntax/extra). The community
+# pack at scopatz/nanorc carries roughly 180, covering yaml variants, toml,
+# dockerfile, terraform, nginx, systemd units and the rest of what a student in
+# a networking course actually opens.
+sync_syntax_pack() {
+    if [[ -n "$NO_SYNTAX" ]]; then
+        log_info "Skipping the community syntax pack (--no-syntax)."
+        return 0
+    fi
+
+    if [[ -n "$DRY_RUN" ]]; then
+        log_info "[dry-run] would sync $SYNTAX_REPO → $SYNTAX_DIR"
+        return 0
+    fi
+
+    if ! command -v git >/dev/null 2>&1; then
+        log_warn "git is not installed; skipping the community syntax pack.
+The definitions shipped with nano will still be used."
+        return 0
+    fi
+
+    log_step "Syncing extra syntax definitions..."
+
+    if [[ ! -d "$SYNTAX_DIR/.git" ]]; then
+        if [[ -d "$SYNTAX_DIR" ]]; then
+            log_warn "$SYNTAX_DIR exists but is not a git clone; leaving it alone."
+            return 0
+        fi
+        if ! git clone --depth 1 --quiet "$SYNTAX_REPO" "$SYNTAX_DIR"; then
+            log_warn "Could not clone the syntax pack. The definitions shipped
+with nano will still be used."
+            return 0
+        fi
+        log_ok "Cloned the community syntax pack to $SYNTAX_DIR"
+        return 0
+    fi
+
+    # Never discard someone's local edits to a syntax file.
+    if [[ -n "$(git -C "$SYNTAX_DIR" status --porcelain)" ]]; then
+        log_warn "$SYNTAX_DIR has local changes; not pulling."
+        return 0
+    fi
+
+    if ! git -C "$SYNTAX_DIR" pull --ff-only --quiet; then
+        log_warn "Could not update the syntax pack; using what is already there."
+    else
+        log_ok "Syntax pack is up to date."
+    fi
+    return 0
+}
+
 # ---------------------------------------------------------------------------
 # nanorc rendering
 # ---------------------------------------------------------------------------
