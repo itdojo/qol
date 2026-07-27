@@ -38,6 +38,21 @@ The nanorc body lives inside `install_nano.sh` as a heredoc in `render_nanorc`, 
 
 ### Task 1: Script skeleton, flags, and test harness
 
+> **Amended after review, 2026-07-26.** Two things in this task's code below are
+> wrong; the implemented version in `install_nano.sh` is correct and governs.
+>
+> 1. `set -euo pipefail` must **not** sit at file scope. `source` runs in the
+>    caller's shell, so it turns on `-e` in the test harness — which declares
+>    only `set -uo pipefail` — and any later test calling a function that
+>    returns non-zero outside a conditional would kill the suite with no output.
+>    It belongs inside the `[[ "${BASH_SOURCE[0]}" == "${0}" ]]` guard.
+> 2. The output-theme helpers below are a lossy paraphrase of
+>    `install_zsh_starship.sh`'s, not the copy the comment claims. They dropped
+>    the `QOL_COLOR` TTY/`NO_COLOR` gate (so log lines emitted raw ANSI into
+>    pipes and log files), the numeric `tput cols` guard, and `format_font`'s
+>    leading `printline`. Copy `install_zsh_starship.sh:58-113` verbatim
+>    instead, and make sure `log_step` does not then emit a double separator.
+
 **Files:**
 - Create: `install_nano.sh`
 - Create: `tests/test-install-nano.sh`
