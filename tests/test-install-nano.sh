@@ -368,8 +368,14 @@ test_render_nanorc() {
     assert_contains "$out" 'set matchbrackets "(<[{)>]}"' "core: matchbrackets"
     assert_contains "$out" "bind ^S savefile main" "binding: ^S saves"
 
-    assert_contains "$out" "set indicator"  "gated: indicator written"
-    assert_contains "$out" "set stateflags" "gated: stateflags written"
+    # Anchored to a line start (leading newline) so these cannot pass against
+    # the commented-out form gated_directive emits on an unsupported build —
+    # "# set indicator   # unavailable ..." also contains the bare substring
+    # "set indicator", so an unanchored assert_contains would pass either way.
+    assert_contains "$out" "
+set indicator" "gated: indicator written"
+    assert_contains "$out" "
+set stateflags" "gated: stateflags written"
 
     # Excluded by design — these must never appear.
     assert_not_contains "$out" "set mouse"   "excluded: mouse"
@@ -387,6 +393,7 @@ test_render_nanorc() {
         "community include precedes shipped include"
 
     # --- tiny build ---
+    # shellcheck disable=SC2034  # read by nano_supports (via render_nanorc), not directly in this file
     nano_help_cache=' -l, --linenumbers'
     out="$(render_nanorc)"
     assert_contains "$out" "set linenumbers" "tiny: core still written"
@@ -396,6 +403,19 @@ set indicator" "tiny: indicator not written as a directive"
     assert_contains "$out" "nano 5.0" "tiny: comment names the enabling version"
     assert_contains "$out" "# set stateflags" "tiny: stateflags left as a comment"
     assert_contains "$out" "nano 5.3" "tiny: stateflags comment names 5.3"
+
+    # --- no syntax directories at all ---
+    # Neither the community dir nor any shipped prefix exists. render_nanorc
+    # must still succeed and emit a well-formed block with no include line at
+    # all — never an "include ""` for a glob that resolved to nothing.
+    SYNTAX_DIR="$tmp/nonexistent-community"
+    QOL_NANO_PREFIXES="$tmp/nonexistent-shipped"
+    local rc
+    out="$(render_nanorc)"; rc=$?
+    assert_eq "0" "$rc" "no syntax dirs: render_nanorc exits 0"
+    assert_contains "$out" "$BLOCK_START" "no syntax dirs: block start marker present"
+    assert_contains "$out" "$BLOCK_END"   "no syntax dirs: block end marker present"
+    assert_not_contains "$out" 'include ""' "no syntax dirs: no empty include line"
 
     SYNTAX_DIR="$saved_dir"
     QOL_NANO_PREFIXES="$saved_prefixes"
