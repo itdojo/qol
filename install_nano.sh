@@ -381,12 +381,48 @@ backup_file() {
     log_info "Backed up $f → $backup"
 }
 
-# Overwrite dst with the contents of src, keeping dst's mode, owner and inode.
-# `mv tmp dst` would be simpler but carries the temp file's permissions across —
-# mktemp creates 0600, which would silently tighten a normal 0644 .nanorc.
+# Overwrite dst with the contents of src, atomically.
+#
+# An earlier version was `cat "$src" > "$dst"`, which truncates dst at
+# redirection time — a disk-full or killed process left the user's ~/.nanorc
+# half-written with no way back. Renaming a fully-written temp file over the
+# target closes that window: the rename either happens or it doesn't.
+#
+# Two details are load-bearing. The temp file is created in the DESTINATION's
+# directory, not $TMPDIR, because a rename is only atomic within one
+# filesystem and on macOS $TMPDIR is a different APFS volume from $HOME. And
+# symlinks are resolved first, because renaming onto a symlink replaces the
+# link with a regular file — which would quietly detach a ~/.nanorc that a
+# user has symlinked into a dotfiles repo.
+#
+# What survives is the path, the mode, and the symlink if there is one — not
+# the inode: the atomic rename necessarily replaces it.
 replace_file_contents() {
-    local src="$1" dst="$2"
-    cat "$src" > "$dst"
+    local src="$1" dst="$2" target tmp mode link guard=0
+
+    target="$dst"
+    while [[ -L "$target" ]] && [[ "$guard" -lt 20 ]]; do
+        link="$(readlink "$target")"
+        case "$link" in
+            /*) target="$link" ;;
+            *)  target="$(dirname "$target")/$link" ;;
+        esac
+        guard=$((guard + 1))
+    done
+
+    # BSD and GNU stat disagree on flags; try both before giving up.
+    mode="$(stat -f '%Lp' "$target" 2>/dev/null \
+        || stat -c '%a' "$target" 2>/dev/null \
+        || echo 644)"
+
+    tmp="$(mktemp "${target}.XXXXXX")" || {
+        log_err "Could not create a temporary file next to $target"
+        return 1
+    }
+
+    cat "$src" > "$tmp" || { rm -f "$tmp"; return 1; }
+    chmod "$mode" "$tmp"
+    mv "$tmp" "$target"
     rm -f "$src"
 }
 

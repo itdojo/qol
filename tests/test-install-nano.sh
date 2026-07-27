@@ -488,7 +488,8 @@ set mouse" "line appended after the end marker survives (relocated, not lost)"
     assert_eq "1" "$(grep -cF "$BLOCK_START" "$NANORC")" \
         "still exactly one start marker after the stale-line rerun"
 
-    # File mode must survive: replace_file_contents keeps the inode.
+    # File mode must survive: replace_file_contents carries the mode across
+    # the atomic rename (it no longer preserves the inode — see its comment).
     chmod 644 "$NANORC"
     local mode_before
     # shellcheck disable=SC2012  # permission string only; filename is a fixed fixture path with no odd characters
@@ -504,6 +505,118 @@ set mouse" "line appended after the end marker survives (relocated, not lost)"
 }
 
 test_managed_block
+
+echo
+echo "== replace_file_contents: mode, symlinks, truncation safety =="
+
+# Portable octal mode, BSD stat (macOS) first, then GNU stat (Linux).
+file_mode() {
+    stat -f '%Lp' "$1" 2>/dev/null || stat -c '%a' "$1" 2>/dev/null
+}
+
+test_mode_preservation() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/share/nano"
+
+    local saved_rc="$NANORC" saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    NANORC="$tmp/nanorc"
+    SYNTAX_DIR="$tmp/absent"
+    QOL_NANO_PREFIXES="$tmp/share/nano"
+    # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc), not directly in this file
+    nano_help_cache=' -l, --linenumbers'
+
+    local mode
+    for mode in 640 600; do
+        printf 'set nowrap\n' > "$NANORC"
+        chmod "$mode" "$NANORC"
+        write_nanorc
+        assert_eq "$mode" "$(file_mode "$NANORC")" "mode $mode survives one write_nanorc"
+        write_nanorc
+        assert_eq "$mode" "$(file_mode "$NANORC")" "mode $mode survives a rerun too"
+        rm -f "$NANORC"
+    done
+
+    NANORC="$saved_rc"
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
+test_symlink_survival() {
+    local tmp; tmp="$(mktemp -d)"
+    mkdir -p "$tmp/share/nano"
+
+    local saved_rc="$NANORC" saved_dir="$SYNTAX_DIR" saved_prefixes="${QOL_NANO_PREFIXES:-}"
+    local real="$tmp/real-nanorc"
+    NANORC="$tmp/nanorc"
+    SYNTAX_DIR="$tmp/absent"
+    QOL_NANO_PREFIXES="$tmp/share/nano"
+    # shellcheck disable=SC2034  # read by nano_supports (via write_nanorc -> render_nanorc), not directly in this file
+    nano_help_cache=' -l, --linenumbers'
+
+    printf 'set nowrap\n' > "$real"
+    ln -s "$real" "$NANORC"
+
+    write_nanorc
+    assert_ok "[ -L \"$NANORC\" ]" "NANORC path is still a symlink after one write"
+    assert_contains "$(cat "$real")" "set linenumbers" "block landed in the symlink TARGET, not a copy replacing the link"
+
+    local first; first="$(cat "$NANORC")"
+    write_nanorc
+    assert_ok "[ -L \"$NANORC\" ]" "NANORC path is still a symlink after a rerun"
+    local second; second="$(cat "$NANORC")"
+    assert_eq "$first" "$second" "rerun through a symlink is byte-identical"
+
+    NANORC="$saved_rc"
+    SYNTAX_DIR="$saved_dir"
+    QOL_NANO_PREFIXES="$saved_prefixes"
+    rm -rf "$tmp"
+}
+
+test_truncation_safety() {
+    local tmp; tmp="$(mktemp -d)"
+    local dst="$tmp/dst"
+    printf 'ORIGINAL CONTENT THAT MUST SURVIVE\n' > "$dst"
+
+    # Detect whether this sandbox actually enforces ulimit -f before relying
+    # on it for the test — some containers silently ignore the limit, in
+    # which case a "filesize-limited" write would just succeed in full and
+    # the test would prove nothing.
+    local ulimit_enforced=""
+    if ( ulimit -f 1 2>/dev/null && dd if=/dev/zero of="$tmp/probe" bs=1024 count=10 \
+        ) >/dev/null 2>&1; then
+        ulimit_enforced=""
+    else
+        ulimit_enforced=1
+    fi
+    rm -f "$tmp/probe"
+
+    if [[ -n "$ulimit_enforced" ]]; then
+        # Reproduce the reviewer's actual failure mode: a source bigger than
+        # the limit, so cat is killed mid-write rather than never starting.
+        local src="$tmp/src"
+        for _ in $(seq 1 200); do
+            printf '%s\n' \
+                "0123456789012345678901234567890123456789012345678901234567890123456789" \
+                >> "$src"
+        done
+        ( ulimit -f 1 2>/dev/null; replace_file_contents "$src" "$dst" ) 2>/dev/null || true
+        assert_eq "ORIGINAL CONTENT THAT MUST SURVIVE" "$(cat "$dst")" \
+            "a filesize-limited write leaves the original file intact (ulimit -f enforced)"
+    else
+        # Fall back to a source that does not exist — cat fails immediately,
+        # exercising the same "write fails, dst must be untouched" path.
+        replace_file_contents "$tmp/does-not-exist" "$dst" 2>/dev/null || true
+        assert_eq "ORIGINAL CONTENT THAT MUST SURVIVE" "$(cat "$dst")" \
+            "a failed write leaves the original file intact (ulimit -f not enforced here)"
+    fi
+
+    rm -rf "$tmp"
+}
+
+test_mode_preservation
+test_symlink_survival
+test_truncation_safety
 
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
