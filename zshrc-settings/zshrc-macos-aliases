@@ -1,0 +1,53 @@
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+#                                                                                 ALIASES: COMMANDS
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+alias c=clear
+alias lsz="eza -l --group-directories-last --icons=always --group --mounts --git"
+alias ls="lsz"
+alias less="bat"
+alias python=python3
+alias p=python3
+alias z='cp ~/.zshrc ~/.zshrc.bak && ${EDITOR:-vim} ~/.zshrc'
+alias zshrc="z"
+alias sz="source ~/.zshrc"
+alias cat="bat --style=plain"
+alias bat="bat --style=full"
+alias tmuxconfig='${EDITOR:-vim} $XDG_CONFIG_HOME/tmux/tmux.conf'
+alias ghosttyconfig='${EDITOR:-vim} $XDG_CONFIG_HOME/ghostty/config.ghostty'
+alias vimconfig='${EDITOR:-vim} $HOME/.vimrc'
+#alias vim=nvim
+alias fleet="~/fleet/fleet"
+alias claude="claude --chrome"   # https://code.claude.com/docs/en/chrome
+alias gotime="~/projects/qol/gotime"
+
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+#                                                                                     ALIASES: TMUX
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+alias tks="tmux kill-server"         # Kill all tmux sessions
+alias tkserver="tmux kill-server"    # Kill all tmux sessions
+alias tksess="tmux kill-session"     # Kill current tmux session
+alias tksession="tmux kill-session"  # Kill current tmux session
+alias tkp="tmux kill-pane"           # Kill tmux pane
+alias tkw="tmux kill-window"         # Kill tmux window
+alias td="tmux detach"               # Detach from tmux session
+alias ta="tmux attach"               # Attach to tmux session
+alias tn="tmux new"                  # New tmux session (default name)
+alias tns="tmux new -s"              # New tmux session named <session_name>
+
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+#                                                                              ALIASES: DIRECTORIES
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+alias vaults="cd ~/vaults/"
+alias vlt="cd ~/vaults/"
+alias dojobrain="cd ~/vaults/dojobrain/"
+alias brain="cd ~/vaults/dojobrain/"
+alias sleepybrain="cd ~/vaults/sleepybrain/"
+alias homebrain="cd ~/vaults/homebrain/"
+alias courseware="cd ~/courseware/"
+alias crs="cd ~/courseware/"
+alias projects="cd ~/projects/"
+alias prj="cd ~/projects/"
+alias ai="cd ~/courseware/ai"
+alias halow="cd ~/courseware/halow-lora-2026/"
+alias lora="cd ~/courseware/halow-lora-2026/"
+

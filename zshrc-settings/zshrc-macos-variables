@@ -1,0 +1,33 @@
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+#                                                                                 PRIVATE VARIABLES
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+# Secrets live in ~/.config/secrets.zsh (mode 600), never in this file.
+[[ -r "$XDG_CONFIG_HOME/secrets.zsh" ]] && source "$XDG_CONFIG_HOME/secrets.zsh"
+
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+#                                                                             ENVIRONMENT VARIABLES
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+export PATH="$HOME/.local/bin:$PATH"
+export PAGER='less'
+export GITHUB_KEY=~/.ssh/github
+
+# bat --list-themes for options
+export BAT_THEME="Catppuccin Mocha"
+
+export EZA_CONFIG_DIR=$XDG_CONFIG_HOME/eza
+
+# Caveman agent for harness. Options: lite, full, ultra 
+# npm install -g @juliusbrussee/caveman-code
+export CAVEMAN_DEFAULT_MODE=lite
+
+if [[ ! -d ~/.config ]]; then mkdir -p ~/.config/; fi
+export XDG_CONFIG_HOME=$HOME/.config
+
+# Set the default editor based on whether we're in an SSH session or not.
+if [[ -n $SSH_CONNECTION ]]; then
+    export EDITOR='vim'
+    export VISUAL='vim'
+else
+    export EDITOR='vim'
+    export VISUAL='vim'     # Set to 'code' for VS Code.
+fi

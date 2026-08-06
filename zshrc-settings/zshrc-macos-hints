@@ -1,0 +1,48 @@
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+#                                                                                        HINTS MENU
+# ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+# fzf trainer hints
+echo " ⌃R - 🗿 command history        (ctrl+r)"
+echo " ⌃T - 📌 paste to CLI           (ctrl+t)"
+echo " ⌥C - 📂 cd to folder           (alt+c)"
+echo " cmd **<tab> - 📌 paste to CLI"
+# end fzf trainer hints
+echo "'hint' ► shortcut reminders"
+function hint() {
+    command cat << 'EOF'
+⎼⎼ 📍 SHORTCUTS ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+•  z                 → edit .zshrc
+•  sz                → source .zshrc
+•  c                 → clear screen
+•  p                 → python3
+•  mkcd path/to/dir  → create & cd to path/to/dir
+•  here / back       → mark dir / return to marked dir
+•  netstatus [-f]    → wi-fi + internet status (-f = fresh check)
+•  vimconfig         → edit vim config file
+•  tmuxconfig        → edit tmux config file
+•  ghosttyconfig     → edit ghostty config file
+•  ⌃ R               → command history (fzf) (ctrl+r)
+•  ⌃ T               → paste to CLI (fzf) (ctrl+t)
+•  ⌥ C               → cd to folder (fzf) (alt+c)
+•  <cmd> **<tab>     → paste to CLI after <cmd> (fzf)
+•  ⌃ ⌘ ␠             → MacOS emoji menu (ctrl+cmd+space)
+
+⎼⎼ ⚙️ TMUX ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+•  tks               → kill server
+•  tksess            → kill session
+•  tkp               → kill pane
+•  tkw               → kill window
+•  td                → detach session
+•  ta                → attach session
+•  tn                → new session
+•  tns <name>        → new session <name>
+
+⎼⎼ 📂 DIRECTORIES ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+•  crs               → 📚 courseware
+•  ai                → 🤖 ai courseware
+•  prj               → 📦 projects folder
+•  vlt               → 📒 obsidian vaults
+•  brain             → 🧠 dojobrain vault
+⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
+EOF
+}
