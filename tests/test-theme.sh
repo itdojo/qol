@@ -134,5 +134,65 @@ else
     printf '  FAIL complete was shadowed by a function\n'
 fi
 
+_strip_ansi() {
+    printf '%s' "$1" | sed -E $'s/\x1b\\[[0-9;]*m//g'
+}
+
+# ‒‒ log_phase, banner, log_complete ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+printf '\nlog_phase fill arithmetic is exact\n'
+QOL_COLOR_DEPTH=none qol_init_color
+cols="$(_term_cols)"
+title="DOCKER ENGINE"
+line="$(log_phase "$title" | sed -n '2p')"
+assert_contains "$line" "── ${title} " "log_phase (none) content line reads '── TITLE '"
+assert_eq "$cols" "${#line}" "log_phase (none) total rule width equals terminal width"
+
+printf '\nlog_phase fill arithmetic holds at every depth\n'
+for d in truecolor 256 8 none; do
+    QOL_FORCE_COLOR=1 QOL_COLOR_DEPTH="$d" qol_init_color
+    cols="$(_term_cols)"
+    title="DOCKER ENGINE"
+    raw="$(log_phase "$title" | sed -n '2p')"
+    stripped="$(_strip_ansi "$raw")"
+    assert_contains "$stripped" "$title" "log_phase carries the title at depth=$d"
+    assert_eq "$cols" "${#stripped}" "log_phase total rule width equals terminal width at depth=$d"
+done
+
+printf '\nlog_phase guards a title longer than the terminal width\n'
+for d in truecolor 256 8 none; do
+    QOL_FORCE_COLOR=1 QOL_COLOR_DEPTH="$d" qol_init_color
+    cols="$(_term_cols)"
+    long_title="$(_repeat 'X' $((cols + 20)))"
+    raw="$(log_phase "$long_title" | sed -n '2p')"
+    stripped="$(_strip_ansi "$raw")"
+    assert_contains "$stripped" "$long_title" "log_phase with an over-long title still prints the full title at depth=$d"
+    assert_eq "$((${#long_title} + 4))" "${#stripped}" "log_phase with an over-long title emits zero fill (not negative) at depth=$d"
+done
+
+printf '\nbanner emits three lines; subtitle rides the middle line\n'
+for d in truecolor 256 8 none; do
+    QOL_FORCE_COLOR=1 QOL_COLOR_DEPTH="$d" qol_init_color
+
+    out="$(banner "X")"
+    line_count="$(printf '%s\n' "$out" | wc -l | tr -d ' ')"
+    assert_eq "3" "$line_count" "banner (no subtitle) emits three lines at depth=$d"
+    mid="$(printf '%s\n' "$out" | sed -n '2p')"
+    assert_contains "$mid" "⛩ X ⛩" "banner (no subtitle) middle line carries the title at depth=$d"
+
+    out_sub="$(banner "X" "sub")"
+    line_count_sub="$(printf '%s\n' "$out_sub" | wc -l | tr -d ' ')"
+    assert_eq "3" "$line_count_sub" "banner (with subtitle) still emits three lines at depth=$d"
+    mid_sub="$(printf '%s\n' "$out_sub" | sed -n '2p')"
+    assert_contains "$mid_sub" "⛩ X ⛩" "banner (with subtitle) keeps the title on the middle line at depth=$d"
+    assert_contains "$mid_sub" "sub" "banner (with subtitle) puts the subtitle on the middle line at depth=$d"
+done
+
+printf '\nlog_complete emits the crest and the title\n'
+for d in truecolor 256 8 none; do
+    QOL_FORCE_COLOR=1 QOL_COLOR_DEPTH="$d" qol_init_color
+    out="$(log_complete "X")"
+    assert_contains "$out" "⛩ X ⛩" "log_complete carries the crest and the title at depth=$d"
+done
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
