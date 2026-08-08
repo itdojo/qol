@@ -1035,11 +1035,16 @@ change_default_shell() {
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 main() {
     check_for_root
+
+    banner "ZSH + STARSHIP" "shell · prompt · fonts · plugins"
+    log_phase "PREFLIGHT"
+
     detect_package_manager
     setup_sudo
 
     log_info "OS=$OS  ARCH=$ARCH  PKG_MGR=$PKG_MGR"
 
+    log_phase "PACKAGES"
     ensure_homebrew         # macOS: bootstrap brew BEFORE anything that uses it
 
     # Core dependencies
@@ -1051,17 +1056,24 @@ main() {
     run_uninstaller         # Oh My Zsh / Powerlevel10k must go before Starship
     ensure_starship
     install_zsh_plugins
+
+    log_phase "FONTS"
     install_nerd_fonts
+
+    log_phase "CONFIG"
     write_git_aliases
     write_starship_config
     update_zshrc
+
+    log_phase "DEFAULT SHELL"
     change_default_shell
 
-    format_font "Prompt config:  ~/.config/starship.toml   (docs: https://starship.rs/config/)
-Git aliases:    ~/.config/zsh/git-aliases.zsh
-Plugins:        ~/.zsh/plugins/
-If glyphs render as boxes, set your terminal font to 'MesloLGS NF'." normal blue
-    format_font "Install complete. Please restart your terminal." bold green
+    log_complete "ZSH + STARSHIP INSTALLED"
+    log_next "Prompt config:  ~/.config/starship.toml   (docs: https://starship.rs/config/)"
+    log_next "Git aliases:    ~/.config/zsh/git-aliases.zsh"
+    log_next "Plugins:        ~/.zsh/plugins/"
+    log_next "If glyphs render as boxes, set your terminal font to 'MesloLGS NF'."
+    log_next "Restart your terminal to pick up the new shell."
     echo
 }
 
