@@ -100,10 +100,19 @@ if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
     esac
     C_RESET=$'\033[0m'
     C_BOLD=$'\033[1m'
-    CLR_EOL=$'\033[K'
 else
     C_RESET="" C_BOLD="" C_FG="" C_JADE="" C_VIOLET="" C_STEEL=""
-    C_SAFFRON="" C_STOP="" C_META="" C_RULE="" SEL_BG="" CLR_EOL=""
+    C_SAFFRON="" C_STOP="" C_META="" C_RULE="" SEL_BG=""
+fi
+
+# Cursor control is not color, so it is gated on the terminal alone: the
+# redraw still has to erase what it overwrites when NO_COLOR is set.
+if [[ -t 1 ]]; then
+    CUR_HOME=$'\033[H'    # cursor to row 1, col 1
+    CLR_EOL=$'\033[K'     # erase from cursor to end of line
+    CLR_EOS=$'\033[J'     # erase from cursor to end of screen
+else
+    CUR_HOME="" CLR_EOL="" CLR_EOS=""
 fi
 
 # --- discovery --------------------------------------------------------------
@@ -153,8 +162,8 @@ hr() {  # a full-width colored rule
 
 banner() {
     hr
-    printf '   %s⛩ GO TIME ⛩%s   %spick a workspace — launch the session%s\n' \
-        "$C_JADE$C_BOLD" "$C_RESET" "$C_META" "$C_RESET"
+    printf '   %s⛩ GO TIME ⛩%s   %spick a workspace — launch the session%s%s\n' \
+        "$C_JADE$C_BOLD" "$C_RESET" "$C_META" "$C_RESET" "$CLR_EOL"
     hr
 }
 
@@ -166,8 +175,10 @@ render_row() {  # render_row <index> <selected-index> <number-width>
         printf '%s%s%s ❯  %s   %s%s%s\n' \
             "$SEL_BG" "$C_BOLD" "$C_JADE" "$num" "$name" "$CLR_EOL" "$C_RESET"
     else
-        printf '    %s%s%s   %s%s%s\n' \
-            "$C_META" "$num" "$C_RESET" "$C_FG" "$name" "$C_RESET"
+        # CLR_EOL is not cosmetic here: the row this one replaces may have been
+        # the selected row, whose SEL_BG runs to the right edge.
+        printf '    %s%s%s   %s%s%s%s\n' \
+            "$C_META" "$num" "$C_RESET" "$C_FG" "$name" "$C_RESET" "$CLR_EOL"
     fi
 }
 
@@ -179,31 +190,40 @@ footer() {  # footer <selected-index> <number-buffer>
         "$HOME"/*) tgt="~/${tgt#"$HOME"/}" ;;
         "$HOME")   tgt="~" ;;
     esac
-    echo
+    printf '%s\n' "$CLR_EOL"
     hr
-    printf ' %s↑/↓%s or %sj/k%s move   %s1-9%s jump   %s⏎%s start   %sq%s quit\n' \
+    printf ' %s↑/↓%s or %sj/k%s move   %s1-9%s jump   %s⏎%s start   %sq%s quit%s\n' \
         "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET" \
-        "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET"
+        "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET" "$CLR_EOL"
+    # The selection name and the target path both change length as the
+    # highlight moves, so this line has to erase its own tail.
     printf ' %swindows:%s dojobrain · %s%s%s · local     %s%s%s' \
         "$C_META" "$C_RESET" "$C_BOLD$C_JADE" "${NAMES[$sel]}" "$C_RESET" \
         "$C_META" "$tgt" "$C_RESET"
     [[ -n "$numbuf" ]] && printf '   %s[%s]%s' "$C_VIOLET" "$numbuf" "$C_RESET"
-    echo
+    printf '%s\n' "$CLR_EOL"
 }
 
 draw() {  # draw <selected-index> <number-buffer>
     local sel="$1" numbuf="$2" i kind prev="" numw="${#COUNT}"
-    tput clear 2>/dev/null || printf '\033[2J\033[H'
+    # Home and overwrite in place; do NOT clear first. `tput clear` blanks the
+    # screen and the ~40 writes that repaint it are separate, so the terminal
+    # renders the empty frame — a visible flicker on every keypress. Each line
+    # erases its own tail with CLR_EOL, and CLR_EOS at the end drops whatever
+    # a taller previous frame left below this one.
+    printf '%s' "$CUR_HOME"
     banner
     for (( i = 0; i < COUNT; i++ )); do
         kind="${KINDS[$i]}"
         if [[ "$kind" != "$prev" ]]; then
-            printf '\n %s%s%s\n' "$C_VIOLET$C_BOLD" "$(section_title "$kind")" "$C_RESET"
+            printf '%s\n %s%s%s%s\n' "$CLR_EOL" \
+                "$C_VIOLET$C_BOLD" "$(section_title "$kind")" "$C_RESET" "$CLR_EOL"
             prev="$kind"
         fi
         render_row "$i" "$sel" "$numw"
     done
     footer "$sel" "$numbuf"
+    printf '%s' "$CLR_EOS"
 }
 
 # --- input ------------------------------------------------------------------
@@ -242,6 +262,9 @@ menu() {
     SELIDX=0
     local numbuf="" n cand
     tput smcup 2>/dev/null; tput civis 2>/dev/null; TUI_ACTIVE=1
+    # The only clear in the session. The alternate screen is not guaranteed
+    # blank on entry; every later frame overwrites in place instead.
+    tput clear 2>/dev/null || printf '\033[H\033[J'
     draw "$SELIDX" "$numbuf"
     while true; do
         read_key
