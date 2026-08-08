@@ -236,6 +236,111 @@ log_title() {
     style_text "$1" bold jade
     printf '%s%s%s\n' "$QOL_PASS" "$(_repeat '━' "$cols")" "$QOL_RESET"
 }
+
+# ‒‒ Interactive ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Three question shapes, sharing gotime's chrome. Prompts go to stderr so
+# ask_value and ask_choice can be captured with $(...). All three skip the
+# prompt and return the default when ASSUME_YES is set or stdin is not a
+# TTY — the priority order install_nano.sh already follows.
+
+# Decode one keypress into _KEY (and _KEYCH for digits). Bash 3.2 safe:
+# no read -N, no fractional -t. Arrows arrive as ESC then "[A"/"OA".
+_read_key() {
+    local k s
+    _KEY=""; _KEYCH=""
+    IFS= read -rsn1 k || { _KEY="QUIT"; return 0; }
+    if [[ -z "$k" ]]; then _KEY="ENTER"; return 0; fi
+    case "$k" in
+        $'\r'|$'\n') _KEY="ENTER" ;;
+        $'\x1b')
+            s=""
+            IFS= read -rsn2 -t 1 s
+            case "$s" in
+                '[A'|'OA') _KEY="UP" ;;
+                '[B'|'OB') _KEY="DOWN" ;;
+                '')        _KEY="QUIT" ;;
+                *)         _KEY="OTHER" ;;
+            esac ;;
+        [0-9]) _KEY="DIGIT"; _KEYCH="$k" ;;
+        k|K)   _KEY="UP" ;;
+        j|J)   _KEY="DOWN" ;;
+        q|Q)   _KEY="QUIT" ;;
+        *)     _KEY="OTHER" ;;
+    esac
+    return 0
+}
+
+# ask_confirm "question" [Y|N]  ->  exit 0 for yes, 1 for no
+ask_confirm() {
+    local q="$1" def="${2:-N}" hint reply
+    if [[ -n "${ASSUME_YES:-}" ]]; then return 0; fi
+    if [[ ! -t 0 ]]; then [[ "$def" == "Y" ]]; return $?; fi
+    if [[ "$def" == "Y" ]]; then hint="Y/n"; else hint="y/N"; fi
+    _log_line "$QOL_STEP" ASK "$q" >&2
+    printf '    %s❯%s %s[%s]%s ' "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$hint" "$QOL_RESET" >&2
+    read -r reply
+    reply="${reply:-$def}"
+    case "$reply" in [Yy]*) return 0 ;; *) return 1 ;; esac
+}
+
+# ask_value "question" "default" ["hint"]  ->  echoes the answer
+ask_value() {
+    local q="$1" def="$2" hint="${3:-}" reply
+    if [[ -n "${ASSUME_YES:-}" || ! -t 0 ]]; then printf '%s' "$def"; return 0; fi
+    _log_line "$QOL_STEP" ASK "$q" >&2
+    [[ -n "$hint" ]] && printf '         %s%s%s\n' "$QOL_META" "$hint" "$QOL_RESET" >&2
+    printf '    %s❯%s [%s%s%s] ' "$QOL_PASS" "$QOL_RESET" "$QOL_PASS" "$def" "$QOL_RESET" >&2
+    read -r reply
+    printf '%s' "${reply:-$def}"
+}
+
+# Draw the choice list. Emits exactly (count + 3) lines so the caller knows
+# how far to move the cursor back up when redrawing.
+_ask_choice_draw() {
+    local heading="$1" sel="$2"; shift 2
+    local i=0 item label hint
+    printf '\n %s%s%s%s\n' "$QOL_BOLD" "$QOL_STEP" "$heading" "$QOL_RESET"
+    for item in "$@"; do
+        label="${item%%|*}"
+        hint="${item#*|}"; [[ "$hint" == "$item" ]] && hint=""
+        if (( i == sel )); then
+            printf '%s%s%s ❯ %2d   %-18s %s%s\n' \
+                "$QOL_SEL" "$QOL_BOLD" "$QOL_PASS" "$(( i + 1 ))" "$label" "$hint" "$QOL_RESET"
+        else
+            printf '   %s%2d%s   %s%-18s%s %s%s%s\n' \
+                "$QOL_META" "$(( i + 1 ))" "$QOL_RESET" \
+                "$QOL_FG" "$label" "$QOL_RESET" "$QOL_META" "$hint" "$QOL_RESET"
+        fi
+        i=$(( i + 1 ))
+    done
+    printf ' %s↑/↓%s or %sj/k%s move   %s1-9%s jump   %s⏎%s select\n' \
+        "$QOL_PASS" "$QOL_RESET" "$QOL_PASS" "$QOL_RESET" \
+        "$QOL_PASS" "$QOL_RESET" "$QOL_PASS" "$QOL_RESET"
+}
+
+# ask_choice "HEADING" default_index "label|hint" [...]  ->  echoes 1-based index
+# Redraws in place rather than taking the alternate screen: an installer that
+# blanks the scrollback has destroyed the record of what it just did.
+ask_choice() {
+    local heading="$1" def="$2"; shift 2
+    local n=$#
+    local sel=$(( def - 1 ))
+    if [[ -n "${ASSUME_YES:-}" || ! -t 0 ]]; then printf '%s' "$def"; return 0; fi
+    _ask_choice_draw "$heading" "$sel" "$@" >&2
+    while true; do
+        _read_key
+        case "$_KEY" in
+            ENTER) break ;;
+            QUIT)  sel=$(( def - 1 )); break ;;
+            UP)    sel=$(( (sel - 1 + n) % n )) ;;
+            DOWN)  sel=$(( (sel + 1) % n )) ;;
+            DIGIT) if (( 10#$_KEYCH >= 1 && 10#$_KEYCH <= n )); then sel=$(( 10#$_KEYCH - 1 )); fi ;;
+        esac
+        printf '\033[%dA' $(( n + 3 )) >&2
+        _ask_choice_draw "$heading" "$sel" "$@" >&2
+    done
+    printf '%s' "$(( sel + 1 ))"
+}
 # ‒‒ end theme block
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
