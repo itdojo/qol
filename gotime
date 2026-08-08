@@ -42,7 +42,6 @@ PROJECTS_DIR="$HOME/projects"
 NAMES=()   # slug / display name
 PATHS=()   # absolute path
 KINDS=()   # "course" | "project"
-ICONS=()   # display glyph
 COUNT=0
 
 SELIDX=0        # menu result: index of chosen item, or -1 if cancelled
@@ -51,41 +50,79 @@ KEY=""          # last decoded key (set by read_key)
 KEYCH=""        # the literal char for a DIGIT key
 
 # --- colors -----------------------------------------------------------------
-# Truecolor palette lifted from the user's .zshrc fzf theme so gotime feels
-# native. Suppressed when stdout is not a terminal, or NO_COLOR is set.
+# IT Dojo terminal design system. Palette and rules:
+#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+# Truecolor by default; QOL_COLOR_DEPTH=256|8|none forces down. Detection is
+# not attempted — SSH strips COLORTERM, so it would always guess low.
+# C_STEEL (the INFO ink) has no reader: gotime states and asks, it never
+# narrates, so it emits no INFO-level line. It is carried anyway so this copy
+# of the palette stays a complete copy of the token set.
+# shellcheck disable=SC2034
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+    case "${QOL_COLOR_DEPTH:-truecolor}" in
+        256)
+            C_JADE=$'\033[38;5;77m'
+            C_VIOLET=$'\033[38;5;140m'
+            C_STEEL=$'\033[38;5;110m'
+            C_SAFFRON=$'\033[38;5;179m'
+            C_STOP=$'\033[38;5;168m'
+            C_FG=$'\033[38;5;189m'
+            C_META=$'\033[38;5;103m'
+            C_RULE=$'\033[38;5;60m'
+            SEL_BG=$'\033[48;5;235m'
+            ;;
+        8)
+            C_JADE=$'\033[92m'
+            C_VIOLET=$'\033[94m'
+            C_STEEL=$'\033[94m'
+            C_SAFFRON=$'\033[93m'
+            C_STOP=$'\033[91m'
+            C_FG=$'\033[97m'
+            C_META=$'\033[90m'
+            C_RULE=$'\033[90m'
+            SEL_BG=$'\033[7m'
+            ;;
+        none)
+            C_JADE="" C_VIOLET="" C_STEEL="" C_SAFFRON="" C_STOP=""
+            C_FG="" C_META="" C_RULE="" SEL_BG=""
+            ;;
+        *)
+            C_JADE=$'\033[38;2;78;206;106m'
+            C_VIOLET=$'\033[38;2;188;176;232m'
+            C_STEEL=$'\033[38;2;122;160;216m'
+            C_SAFFRON=$'\033[38;2;224;180;90m'
+            C_STOP=$'\033[38;2;224;107;130m'
+            C_FG=$'\033[38;2;228;222;245m'
+            C_META=$'\033[38;2;154;147;181m'
+            C_RULE=$'\033[38;2;74;65;112m'
+            SEL_BG=$'\033[48;2;36;29;61m'
+            ;;
+    esac
     C_RESET=$'\033[0m'
     C_BOLD=$'\033[1m'
-    C_DIM=$'\033[2m'
-    C_FG=$'\033[38;2;203;224;240m'      # #CBE0F0 foreground
-    C_CYAN=$'\033[38;2;44;249;237m'     # #2CF9ED
-    C_BLUE=$'\033[38;2;6;188;228m'      # #06BCE4
-    C_PURPLE=$'\033[38;2;179;136;255m'  # #B388FF
-    C_YELLOW=$'\033[38;2;255;203;107m'
-    SEL_BG=$'\033[48;2;20;54;82m'       # #143652 highlight bar
     CLR_EOL=$'\033[K'
 else
-    C_RESET="" C_BOLD="" C_DIM="" C_FG="" C_CYAN="" C_BLUE="" C_PURPLE=""
-    C_YELLOW="" SEL_BG="" CLR_EOL=""
+    C_RESET="" C_BOLD="" C_FG="" C_JADE="" C_VIOLET="" C_STEEL=""
+    C_SAFFRON="" C_STOP="" C_META="" C_RULE="" SEL_BG="" CLR_EOL=""
 fi
 
 # --- discovery --------------------------------------------------------------
-add_items() {  # add_items <dir> <kind> <icon>
-    local dir="$1" kind="$2" icon="$3" p base
+add_items() {  # add_items <dir> <kind>
+    local dir="$1" kind="$2" p base
     [[ -d "$dir" ]] || return 0
     shopt -s nullglob
     for p in "$dir"/*/; do
         p="${p%/}"
         [[ -d "$p" ]] || continue
         base="${p##*/}"
-        NAMES+=("$base"); PATHS+=("$p"); KINDS+=("$kind"); ICONS+=("$icon")
+        NAMES+=("$base"); PATHS+=("$p"); KINDS+=("$kind")
     done
     shopt -u nullglob
 }
 
 discover() {
-    add_items "$COURSEWARE_DIR" course "🎓"
-    add_items "$PROJECTS_DIR"   project "📦"
+    add_items "$COURSEWARE_DIR" course
+    add_items "$PROJECTS_DIR"   project
     COUNT="${#NAMES[@]}"
 }
 
@@ -111,27 +148,26 @@ hr() {  # a full-width colored rule
     local ch="${1:-━}" cols line
     cols="$(term_cols)"
     printf -v line '%*s' "$cols" ''
-    printf '%s%s%s\n' "$C_BLUE" "${line// /$ch}" "$C_RESET"
+    printf '%s%s%s\n' "$C_RULE" "${line// /$ch}" "$C_RESET"
 }
 
 banner() {
     hr
-    printf '   %s⚡ GO TIME ⚡%s   %spick a workspace — launch the session%s\n' \
-        "$C_CYAN$C_BOLD" "$C_RESET" "$C_DIM" "$C_RESET"
+    printf '   %s⛩ GO TIME ⛩%s   %spick a workspace — launch the session%s\n' \
+        "$C_JADE$C_BOLD" "$C_RESET" "$C_META" "$C_RESET"
     hr
 }
 
 render_row() {  # render_row <index> <selected-index> <number-width>
-    local i="$1" sel="$2" numw="$3" num icon name
+    local i="$1" sel="$2" numw="$3" num name
     num="$(printf "%${numw}d" $(( i + 1 )))"
-    icon="${ICONS[$i]}"
     name="${NAMES[$i]}"
     if (( i == sel )); then
-        printf '%s%s%s ❯ %s  %s %s%s%s\n' \
-            "$SEL_BG" "$C_BOLD" "$C_CYAN" "$num" "$icon" "$name" "$CLR_EOL" "$C_RESET"
+        printf '%s%s%s ❯  %s   %s%s%s\n' \
+            "$SEL_BG" "$C_BOLD" "$C_JADE" "$num" "$name" "$CLR_EOL" "$C_RESET"
     else
-        printf '   %s%s%s  %s %s%s%s\n' \
-            "$C_DIM" "$num" "$C_RESET" "$icon" "$C_FG" "$name" "$C_RESET"
+        printf '    %s%s%s   %s%s%s\n' \
+            "$C_META" "$num" "$C_RESET" "$C_FG" "$name" "$C_RESET"
     fi
 }
 
@@ -146,12 +182,12 @@ footer() {  # footer <selected-index> <number-buffer>
     echo
     hr
     printf ' %s↑/↓%s or %sj/k%s move   %s1-9%s jump   %s⏎%s start   %sq%s quit\n' \
-        "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET" \
-        "$C_CYAN" "$C_RESET" "$C_CYAN" "$C_RESET"
+        "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET" \
+        "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET"
     printf ' %swindows:%s dojobrain · %s%s%s · local     %s%s%s' \
-        "$C_DIM" "$C_RESET" "$C_BOLD$C_CYAN" "${NAMES[$sel]}" "$C_RESET" \
-        "$C_DIM" "$tgt" "$C_RESET"
-    [[ -n "$numbuf" ]] && printf '   %s[%s]%s' "$C_PURPLE" "$numbuf" "$C_RESET"
+        "$C_META" "$C_RESET" "$C_BOLD$C_JADE" "${NAMES[$sel]}" "$C_RESET" \
+        "$C_META" "$tgt" "$C_RESET"
+    [[ -n "$numbuf" ]] && printf '   %s[%s]%s' "$C_VIOLET" "$numbuf" "$C_RESET"
     echo
 }
 
@@ -162,7 +198,7 @@ draw() {  # draw <selected-index> <number-buffer>
     for (( i = 0; i < COUNT; i++ )); do
         kind="${KINDS[$i]}"
         if [[ "$kind" != "$prev" ]]; then
-            printf '\n %s%s%s\n' "$C_PURPLE$C_BOLD" "$(section_title "$kind")" "$C_RESET"
+            printf '\n %s%s%s\n' "$C_VIOLET$C_BOLD" "$(section_title "$kind")" "$C_RESET"
             prev="$kind"
         fi
         render_row "$i" "$sel" "$numw"
@@ -243,7 +279,7 @@ menu() {
 attach_session() {
     local s="$1"
     if [[ -n "${GOTIME_NO_ATTACH:-}" ]]; then
-        printf '%s✅ session "%s" ready%s (not attaching).\n' "$C_CYAN" "$s" "$C_RESET"
+        printf '%s▌ PASS   session "%s" ready%s (not attaching).\n' "$C_JADE" "$s" "$C_RESET"
         return 0
     fi
     if [[ -n "${TMUX:-}" ]]; then
@@ -257,17 +293,17 @@ launch() {  # launch <slug> <target-dir>
     local slug="$1" target="$2" s="$GOTIME_SESSION"
     local dj="$DOJOBRAIN_DIR" w1 w2 w3 w ans
 
-    [[ -d "$dj" ]] || { printf '%s⚠ %s not found; window 1 will open in ~ instead.%s\n' \
-        "$C_YELLOW" "$dj" "$C_RESET"; dj="$HOME"; }
+    [[ -d "$dj" ]] || { printf '%s▌ WARN   %s not found; window 1 will open in ~ instead.%s\n' \
+        "$C_SAFFRON" "$dj" "$C_RESET"; dj="$HOME"; }
 
-    command -v "${GOTIME_CMD%% *}" >/dev/null 2>&1 || printf '%s⚠ `%s` is not on PATH; those windows will show a "command not found".%s\n' \
-        "$C_YELLOW" "${GOTIME_CMD%% *}" "$C_RESET"
+    command -v "${GOTIME_CMD%% *}" >/dev/null 2>&1 || printf '%s▌ WARN   `%s` is not on PATH; those windows will show a "command not found".%s\n' \
+        "$C_SAFFRON" "${GOTIME_CMD%% *}" "$C_RESET"
 
     if tmux has-session -t "=$s" 2>/dev/null; then
         if [[ -n "${GOTIME_NO_ATTACH:-}" ]]; then
             tmux kill-session -t "=$s"
         else
-            printf '%s⚠ A tmux session named "%s" already exists.%s\n' "$C_YELLOW" "$s" "$C_RESET"
+            printf '%s▌ WARN   A tmux session named "%s" already exists.%s\n' "$C_SAFFRON" "$s" "$C_RESET"
             printf '  [a] attach to it    [r] recreate it fresh    [c] cancel   ? '
             IFS= read -r ans
             case "$ans" in
@@ -281,7 +317,7 @@ launch() {  # launch <slug> <target-dir>
     # Build the three windows, capturing each window id so later commands are
     # immune to base-index settings and name collisions.
     w1="$(tmux new-session -d -s "$s" -n dojobrain -c "$dj"     -P -F '#{window_id}')" || {
-        printf '%sgotime: failed to create tmux session.%s\n' "$C_YELLOW" "$C_RESET" >&2; return 1; }
+        printf '%sgotime: failed to create tmux session.%s\n' "$C_STOP" "$C_RESET" >&2; return 1; }
     w2="$(tmux new-window  -t "=$s:" -n "$slug"    -c "$target" -P -F '#{window_id}')"
     w3="$(tmux new-window  -t "=$s:" -n local      -c "$HOME"   -P -F '#{window_id}')"
 
