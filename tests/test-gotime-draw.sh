@@ -23,7 +23,23 @@ TESTS_RUN=0
 TESTS_FAILED=0
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CAP="$(mktemp -t gotime-draw)"
-trap 'rm -f "$CAP"' EXIT
+
+# The menu used to be whatever happened to be in the tester's ~/courseware and
+# ~/projects, so both the item count and the section layout varied by machine —
+# and the per-line-erase assertion below needs a known, non-trivial number of
+# rows to mean anything. Build a fixture tree and point a throwaway config at
+# it. GOTIME_CONFIG outranks any real config the tester has.
+FIXTURE="$(mktemp -d -t gotime-draw-fixture)"
+trap 'rm -f "$CAP"; rm -rf "$FIXTURE"' EXIT
+
+for n in one two three four five six seven eight; do mkdir -p "$FIXTURE/alpha/$n"; done
+for n in nine ten eleven twelve;                  do mkdir -p "$FIXTURE/beta/$n";  done
+
+cat > "$FIXTURE/config" <<EOF
+GOTIME_ROOTS="ALPHA:$FIXTURE/alpha BETA:$FIXTURE/beta"
+GOTIME_PIN=""
+EOF
+export GOTIME_CONFIG="$FIXTURE/config"
 
 # `script` takes the command differently on BSD/macOS and util-linux.
 #

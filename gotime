@@ -2,46 +2,69 @@
 # ----------------------------------------------------------------------------
 # gotime
 #
-# Pick a course (~/courseware) or project (~/projects) from a colorful menu,
-# then spin up a tmux session named "gotime" wired for a work session:
+# Pick a workspace from a colorful menu of your work trees, then spin up a tmux
+# session wired for a work session:
 #
-#   window 1  "dojobrain"   ~/vaults/dojobrain     -> starts `claude`
-#   window 2  "<selection>"  the chosen course/proj -> starts `claude`
-#   window 3  "local"        ~                       -> just a shell prompt
+#   pinned window   an always-present directory (optional) -> starts $GOTIME_CMD
+#   "<selection>"   the workspace you chose                -> starts $GOTIME_CMD
+#   "local"         ~                                      -> just a shell prompt
+#
+# Which trees it scans, and whether there is a pinned window at all, come from
+# config rather than from this file. With no config it scans whichever of
+# ~/projects, ~/code, ~/src, ~/dev, ~/work, and ~/repos exist, and opens no
+# pinned window. `gotime --init` writes a starter config to edit.
 #
 # Navigate the menu with the arrow keys (or j/k), jump by typing an item's
 # number, press Enter to launch, q/Esc to cancel.
 #
 # Usage:
 #   gotime                 # show the menu, then launch
-#   gotime <slug>          # skip the menu, launch straight for <slug> (e.g. gotime ai)
-#   gotime --list          # list the courses/projects it can see, then exit
+#   gotime <slug>          # skip the menu, launch straight for <slug>
+#   gotime --list          # show the resolved config and what it can see
+#   gotime --init          # write a starter config file
 #   gotime -h | --help     # this help
 #
-# Portable across machines: only depends on bash, tmux, and tput, and refers
-# to paths (~/courseware, ~/projects, ~/vaults/dojobrain) that are identical on
-# every box. Written to run on both modern bash and macOS's stock bash 3.2.
+# Config file — $XDG_CONFIG_HOME/gotime/config (default ~/.config/gotime/config),
+# falling back to ~/.gotimerc. It is sourced as bash, so $HOME and command
+# substitution work:
 #
-# Test / power-user knobs (environment variables):
-#   GOTIME_SESSION=name    # use a different tmux session name (default: gotime)
-#   GOTIME_CMD='claude'    # command started in the two claude windows (default: claude)
+#   GOTIME_ROOTS   # trees to scan. "[LABEL:]path" entries separated by
+#                  # whitespace or newlines; without a LABEL the directory's
+#                  # own name becomes the menu heading. Paths must not contain
+#                  # spaces.
+#   GOTIME_PIN     # "[LABEL:]path" for the always-present first window.
+#                  # Empty (the default) means no pinned window.
+#   GOTIME_SESSION # tmux session name (default: gotime)
+#   GOTIME_CMD     # command started in the pinned and selected windows
+#                  # (default: claude). The "local" window never runs it.
+#
+# Every config key is also an environment variable, and the environment wins.
+#
+# Other knobs:
+#   GOTIME_CONFIG=path     # read this config file instead of the default
 #   GOTIME_NO_ATTACH=1     # build the session but do not attach (used by tests)
 #   NO_COLOR=1             # disable color
+#
+# Only depends on bash, tmux, and tput. Written to run on both modern bash and
+# macOS's stock bash 3.2.
 # ----------------------------------------------------------------------------
 
 set -o pipefail
 
 # --- configuration ----------------------------------------------------------
-GOTIME_SESSION="${GOTIME_SESSION:-gotime}"
-GOTIME_CMD="${GOTIME_CMD:-claude}"
-DOJOBRAIN_DIR="$HOME/vaults/dojobrain"
-COURSEWARE_DIR="$HOME/courseware"
-PROJECTS_DIR="$HOME/projects"
+# Where to look when GOTIME_ROOTS says nothing: the conventional names for a
+# tree of checkouts. Every one that exists is scanned, not just the first —
+# people who keep both ~/work and ~/src want both.
+GOTIME_DEFAULT_ROOTS='projects code src dev work repos'
+
+GOTIME_CONFIG_LOADED=""   # the config file actually read, or "" for none
+PIN_LABEL=""              # tmux window name for the pinned window, "" = no pin
+PIN_PATH=""               # its directory
 
 # Parallel arrays describing every selectable item (bash 3.2 has no assoc arrays).
 NAMES=()   # slug / display name
 PATHS=()   # absolute path
-KINDS=()   # "course" | "project"
+KINDS=()   # the root's label, uppercased — the menu section it sits under
 COUNT=0
 
 SELIDX=0        # menu result: index of chosen item, or -1 if cancelled
@@ -115,8 +138,79 @@ else
     CUR_HOME="" CLR_EOL="" CLR_EOS=""
 fi
 
+# --- config -----------------------------------------------------------------
+upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
+
+xdg_config() { printf '%s/gotime/config' "${XDG_CONFIG_HOME:-$HOME/.config}"; }
+
+# The config file gotime would read — which is also the path --init writes when
+# nothing exists yet, so this returns the XDG path even when no file is there.
+config_path() {
+    if [[ -n "${GOTIME_CONFIG:-}" ]]; then printf '%s' "$GOTIME_CONFIG"; return; fi
+    local xdg; xdg="$(xdg_config)"
+    if   [[ -f "$xdg" ]];            then printf '%s' "$xdg"
+    elif [[ -f "$HOME/.gotimerc" ]]; then printf '%s' "$HOME/.gotimerc"
+    else                                  printf '%s' "$xdg"
+    fi
+}
+
+# Precedence is environment > config file > built-in default. The file is
+# sourced rather than parsed so a path can be written as "$HOME/x", which means
+# it can clobber a variable the environment already set — hence saving the
+# environment's values first and putting them back afterwards.
+load_config() {
+    local env_roots="${GOTIME_ROOTS:-}"     env_pin="${GOTIME_PIN:-}"
+    local env_session="${GOTIME_SESSION:-}" env_cmd="${GOTIME_CMD:-}"
+    local f; f="$(config_path)"
+
+    if [[ -f "$f" ]]; then
+        # shellcheck disable=SC1090
+        . "$f" || { printf 'gotime: could not read config %s\n' "$f" >&2; exit 1; }
+        GOTIME_CONFIG_LOADED="$f"
+    fi
+
+    [[ -n "$env_roots"   ]] && GOTIME_ROOTS="$env_roots"
+    [[ -n "$env_pin"     ]] && GOTIME_PIN="$env_pin"
+    [[ -n "$env_session" ]] && GOTIME_SESSION="$env_session"
+    [[ -n "$env_cmd"     ]] && GOTIME_CMD="$env_cmd"
+
+    GOTIME_SESSION="${GOTIME_SESSION:-gotime}"
+    GOTIME_CMD="${GOTIME_CMD:-claude}"
+    GOTIME_PIN="${GOTIME_PIN:-}"
+    GOTIME_ROOTS="${GOTIME_ROOTS:-$(default_roots)}"
+
+    if [[ -n "$GOTIME_PIN" ]]; then
+        PIN_LABEL="$(entry_label "$GOTIME_PIN")"
+        PIN_PATH="$(entry_path "$GOTIME_PIN")"
+    fi
+}
+
+default_roots() {  # whichever of the conventional work trees actually exist
+    local d out=""
+    for d in $GOTIME_DEFAULT_ROOTS; do
+        [[ -d "$HOME/$d" ]] && out="${out}${out:+ }$HOME/$d"
+    done
+    printf '%s' "$out"
+}
+
+# An entry is "[LABEL:]path". Without a LABEL the directory's own name is used,
+# so a bare "$HOME/projects" heads its section PROJECTS with no config at all.
+entry_label() {
+    local e="$1"
+    if [[ "$e" == *:* ]]; then printf '%s' "${e%%:*}"; return; fi
+    e="${e%/}"; printf '%s' "${e##*/}"
+}
+
+entry_path() {
+    local e="$1"
+    [[ "$e" == *:* ]] && e="${e#*:}"
+    printf '%s' "${e%/}"
+}
+
+roots_oneline() { printf '%s' "$GOTIME_ROOTS" | tr '\n' ' '; }
+
 # --- discovery --------------------------------------------------------------
-add_items() {  # add_items <dir> <kind>
+add_items() {  # add_items <dir> <section-label>
     local dir="$1" kind="$2" p base
     [[ -d "$dir" ]] || return 0
     shopt -s nullglob
@@ -130,11 +224,20 @@ add_items() {  # add_items <dir> <kind>
 }
 
 discover() {
-    add_items "$COURSEWARE_DIR" course
-    add_items "$PROJECTS_DIR"   project
+    local e
+    # Deliberate word splitting: GOTIME_ROOTS is a list, separated by either
+    # whitespace or newlines, which is why paths in it may not contain spaces.
+    # shellcheck disable=SC2086
+    for e in $GOTIME_ROOTS; do
+        # Uppercase the section label once here rather than per frame — draw()
+        # runs on every keypress and `upper` forks.
+        add_items "$(entry_path "$e")" "$(upper "$(entry_label "$e")")"
+    done
     COUNT="${#NAMES[@]}"
 }
 
+# First match wins, so two roots holding a same-named directory resolve to
+# whichever root is listed first. Use the menu when that matters.
 find_slug() {  # echo the index of the item whose slug == $1, else nothing
     local want="$1" i
     for (( i = 0; i < COUNT; i++ )); do
@@ -142,8 +245,6 @@ find_slug() {  # echo the index of the item whose slug == $1, else nothing
     done
     return 1
 }
-
-section_title() { [[ "$1" == "course" ]] && printf 'COURSES' || printf 'PROJECTS'; }
 
 # --- drawing ----------------------------------------------------------------
 # Ask the terminal, not terminfo. `tput cols 2>/dev/null` inside a command
@@ -201,7 +302,10 @@ render_row() {  # render_row <index> <selected-index> <number-width>
 }
 
 footer() {  # footer <selected-index> <number-buffer>
-    local sel="$1" numbuf="$2" tgt="${PATHS[$sel]}"
+    local sel="$1" numbuf="$2" tgt="${PATHS[$sel]}" pin=""
+    # The pinned window is optional, so the window list it heads is built
+    # rather than spelled out.
+    [[ -n "$PIN_LABEL" ]] && pin="$PIN_LABEL · "
     # Shorten $HOME to ~ without relying on ${var/#.../~} — bash tilde-expands
     # the replacement string, so build it inside double quotes instead.
     case "$tgt" in
@@ -215,8 +319,8 @@ footer() {  # footer <selected-index> <number-buffer>
         "$C_JADE" "$C_RESET" "$C_JADE" "$C_RESET" "$CLR_EOL"
     # The selection name and the target path both change length as the
     # highlight moves, so this line has to erase its own tail.
-    printf ' %swindows:%s dojobrain · %s%s%s · local     %s%s%s' \
-        "$C_META" "$C_RESET" "$C_BOLD$C_JADE" "${NAMES[$sel]}" "$C_RESET" \
+    printf ' %swindows:%s %s%s%s%s · local     %s%s%s' \
+        "$C_META" "$C_RESET" "$pin" "$C_BOLD$C_JADE" "${NAMES[$sel]}" "$C_RESET" \
         "$C_META" "$tgt" "$C_RESET"
     [[ -n "$numbuf" ]] && printf '   %s[%s]%s' "$C_VIOLET" "$numbuf" "$C_RESET"
     printf '%s\n' "$CLR_EOL"
@@ -241,7 +345,7 @@ draw() {  # draw <selected-index> <number-buffer>
         kind="${KINDS[$i]}"
         if [[ "$kind" != "$prev" ]]; then
             printf '%s\n %s%s%s%s\n' "$CLR_EOL" \
-                "$C_VIOLET$C_BOLD" "$(section_title "$kind")" "$C_RESET" "$CLR_EOL"
+                "$C_VIOLET$C_BOLD" "$kind" "$C_RESET" "$CLR_EOL"
             prev="$kind"
         fi
         render_row "$i" "$sel" "$numw"
@@ -338,10 +442,17 @@ attach_session() {
 
 launch() {  # launch <slug> <target-dir>
     local slug="$1" target="$2" s="$GOTIME_SESSION"
-    local dj="$DOJOBRAIN_DIR" w1 w2 w3 w ans
+    local pin_dir="$PIN_PATH" pin_name="$PIN_LABEL" w1 wsel w ans
+    local first_name first_dir
+    local -a wins=()
 
-    [[ -d "$dj" ]] || { printf '%s▌ WARN   %s not found; window 1 will open in ~ instead.%s\n' \
-        "$C_SAFFRON" "$dj" "$C_RESET"; dj="$HOME"; }
+    # A configured pin that is not there is a config error, not a reason to
+    # open a window somewhere arbitrary: say so and build the session without.
+    if [[ -n "$pin_dir" && ! -d "$pin_dir" ]]; then
+        printf '%s▌ WARN   pinned directory %s not found; opening without it.%s\n' \
+            "$C_SAFFRON" "$pin_dir" "$C_RESET"
+        pin_dir="" pin_name=""
+    fi
 
     command -v "${GOTIME_CMD%% *}" >/dev/null 2>&1 || printf '%s▌ WARN   `%s` is not on PATH; those windows will show a "command not found".%s\n' \
         "$C_SAFFRON" "${GOTIME_CMD%% *}" "$C_RESET"
@@ -361,22 +472,34 @@ launch() {  # launch <slug> <target-dir>
         fi
     fi
 
-    # Build the three windows, capturing each window id so later commands are
-    # immune to base-index settings and name collisions.
-    w1="$(tmux new-session -d -s "$s" -n dojobrain -c "$dj"     -P -F '#{window_id}')" || {
+    # Build the windows, capturing each window id so later commands are immune
+    # to base-index settings and name collisions. `new-session` has to make the
+    # first one, and which window that is depends on whether a pin exists.
+    if [[ -n "$pin_dir" ]]; then first_name="$pin_name"; first_dir="$pin_dir"
+    else                         first_name="$slug";     first_dir="$target"
+    fi
+
+    w1="$(tmux new-session -d -s "$s" -n "$first_name" -c "$first_dir" -P -F '#{window_id}')" || {
         printf '%sgotime: failed to create tmux session.%s\n' "$C_STOP" "$C_RESET" >&2; return 1; }
-    w2="$(tmux new-window  -t "=$s:" -n "$slug"    -c "$target" -P -F '#{window_id}')"
-    w3="$(tmux new-window  -t "=$s:" -n local      -c "$HOME"   -P -F '#{window_id}')"
+    wins=("$w1")
+
+    if [[ -n "$pin_dir" ]]; then
+        wsel="$(tmux new-window -t "=$s:" -n "$slug" -c "$target" -P -F '#{window_id}')"
+        wins+=("$wsel")
+    else
+        wsel="$w1"   # no pin: the first window already is the selection
+    fi
+    wins+=("$(tmux new-window -t "=$s:" -n local -c "$HOME" -P -F '#{window_id}')")
 
     # Keep the window names we chose (claude/node would otherwise rename them).
-    for w in "$w1" "$w2" "$w3"; do
+    for w in "${wins[@]}"; do
         tmux set-window-option -t "$w" automatic-rename off 2>/dev/null
         tmux set-window-option -t "$w" allow-rename off 2>/dev/null
     done
 
     tmux send-keys -t "$w1" "$GOTIME_CMD" Enter
-    tmux send-keys -t "$w2" "$GOTIME_CMD" Enter
-    tmux select-window -t "$w1"   # land on dojobrain by default
+    [[ "$wsel" != "$w1" ]] && tmux send-keys -t "$wsel" "$GOTIME_CMD" Enter
+    tmux select-window -t "$w1"   # land on the pin if there is one, else the selection
 
     attach_session "$s"
 }
@@ -384,24 +507,102 @@ launch() {  # launch <slug> <target-dir>
 # --- top level --------------------------------------------------------------
 usage() {
     cat <<'EOF'
-gotime — pick a course/project and launch a tmux work session.
+gotime — pick a workspace and launch a tmux work session.
 
   gotime            show the menu, then launch
   gotime <slug>     skip the menu and launch straight for <slug>
-  gotime --list     list the courses/projects gotime can see
+  gotime --list     show the resolved config and the workspaces gotime sees
+  gotime --init     write a starter config file
   gotime -h|--help  show this help
 
-The session "gotime" gets three windows: dojobrain (claude), your selection
-(claude), and local (a plain shell in ~).
+The session gets a window for your selection (running GOTIME_CMD), a "local"
+window with a plain shell in ~, and — if GOTIME_PIN is set — a pinned window
+ahead of both.
+
+Config lives in ~/.config/gotime/config (or ~/.gotimerc) and is sourced as
+bash. `gotime --init` writes a commented starter; the keys are GOTIME_ROOTS,
+GOTIME_PIN, GOTIME_SESSION, and GOTIME_CMD, each also readable from the
+environment, which wins over the file.
 EOF
 }
 
 list_items() {
-    local i
-    printf 'Courses and projects gotime can see:\n'
+    local i w=0
+    printf 'config:  %s\n' "${GOTIME_CONFIG_LOADED:-none — using built-in defaults}"
+    printf 'roots:   %s\n' "$(roots_oneline)"
+    if [[ -n "$PIN_PATH" ]]; then
+        printf 'pinned:  %s (%s)\n' "$PIN_LABEL" "$PIN_PATH"
+    else
+        printf 'pinned:  none\n'
+    fi
+    printf 'command: %s\n\n' "$GOTIME_CMD"
+
+    if (( COUNT == 0 )); then
+        printf 'No workspaces found. Run `gotime --init`, then edit GOTIME_ROOTS.\n'
+        return 0
+    fi
+    # Section labels are config-supplied now, so the column is measured rather
+    # than assumed to fit "project".
     for (( i = 0; i < COUNT; i++ )); do
-        printf '  %2d  %-8s %s\n' "$(( i + 1 ))" "${KINDS[$i]}" "${NAMES[$i]}"
+        (( ${#KINDS[$i]} > w )) && w="${#KINDS[$i]}"
     done
+    printf 'Workspaces gotime can see:\n'
+    for (( i = 0; i < COUNT; i++ )); do
+        printf '  %2d  %-*s  %s\n' "$(( i + 1 ))" "$w" "${KINDS[$i]}" "${NAMES[$i]}"
+    done
+}
+
+init_config() {
+    local f d roots="" r
+    f="${GOTIME_CONFIG:-$(xdg_config)}"
+
+    if [[ -e "$f" ]]; then
+        printf 'gotime: %s already exists; not overwriting it.\n' "$f" >&2
+        return 1
+    fi
+    # config_path prefers the XDG file, so writing one while ~/.gotimerc exists
+    # silently retires the older file. Say so rather than let it puzzle later.
+    if [[ "$f" != "$HOME/.gotimerc" && -f "$HOME/.gotimerc" ]]; then
+        printf '%s▌ WARN   ~/.gotimerc exists; the new file takes precedence over it.%s\n' \
+            "$C_SAFFRON" "$C_RESET"
+    fi
+
+    d="${f%/*}"
+    [[ "$d" == "$f" ]] || mkdir -p "$d" || {
+        printf 'gotime: could not create %s\n' "$d" >&2; return 1; }
+
+    # Seed GOTIME_ROOTS with the trees this machine actually has, written as
+    # $HOME/... rather than expanded, so the file stays portable between boxes.
+    for r in $GOTIME_DEFAULT_ROOTS; do
+        [[ -d "$HOME/$r" ]] && roots="${roots}${roots:+ }\$HOME/$r"
+    done
+    [[ -n "$roots" ]] || roots='$HOME/projects'
+
+    cat > "$f" <<EOF || { printf 'gotime: could not write %s\n' "$f" >&2; return 1; }
+# gotime configuration. Sourced as bash, so \$HOME and command substitution
+# work here. Every key below is also an environment variable, and the
+# environment wins over this file.
+
+# Trees to scan for workspaces. Entries are "[LABEL:]path", separated by
+# whitespace or newlines; without a LABEL the directory's own name becomes the
+# menu heading. Paths must not contain spaces.
+GOTIME_ROOTS="$roots"
+
+# An always-present first window, opened here and running GOTIME_CMD — a notes
+# vault, a dotfiles repo, wherever you want a second context every session.
+# Leave empty for no pinned window.
+GOTIME_PIN=""
+
+# tmux session name.
+GOTIME_SESSION="gotime"
+
+# Command started in the pinned window and the selected window. The "local"
+# window never runs it.
+GOTIME_CMD="claude"
+EOF
+
+    printf '%s▌ PASS   wrote %s%s\n' "$C_JADE" "$f" "$C_RESET"
+    printf '  Edit it, then run `gotime --list` to check what it sees.\n'
 }
 
 cleanup() {
@@ -415,20 +616,31 @@ main() {
     local direct="" idx slug target
     case "${1:-}" in
         -h|--help) usage; exit 0 ;;
-        --list)    discover; list_items; exit 0 ;;
+        # --init deliberately skips load_config: a config too broken to source
+        # is exactly when you want to be able to write a fresh one.
+        --init)    init_config; exit $? ;;
+        --list)    load_config; discover; list_items; exit 0 ;;
         -*)        printf 'gotime: unknown option "%s"\n\n' "$1" >&2; usage >&2; exit 2 ;;
         '')        : ;;
         *)         direct="$1" ;;
     esac
 
+    load_config
+
     if ! command -v tmux >/dev/null 2>&1; then
         printf 'gotime: tmux is not installed.\n' >&2; exit 1
     fi
 
+    if [[ -z "${GOTIME_ROOTS//[[:space:]]/}" ]]; then
+        printf 'gotime: no work trees configured, and none of the usual ones exist.\n' >&2
+        printf 'gotime: run `gotime --init`, then set GOTIME_ROOTS in %s\n' "$(config_path)" >&2
+        exit 1
+    fi
+
     discover
     (( COUNT > 0 )) || {
-        printf 'gotime: found no courses under %s or projects under %s.\n' \
-            "$COURSEWARE_DIR" "$PROJECTS_DIR" >&2
+        printf 'gotime: no workspaces found under: %s\n' "$(roots_oneline)" >&2
+        printf 'gotime: check GOTIME_ROOTS in %s\n' "${GOTIME_CONFIG_LOADED:-$(config_path)}" >&2
         exit 1
     }
 

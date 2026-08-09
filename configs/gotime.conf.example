@@ -1,0 +1,34 @@
+# gotime configuration — worked example.
+#
+# Copy to ~/.config/gotime/config and edit, or run `gotime --init` to generate
+# a bare starter seeded with the work trees this machine already has.
+#
+# Sourced as bash, so $HOME and command substitution work here. Every key is
+# also an environment variable, and the environment wins over this file — which
+# is what makes `GOTIME_CMD=vim gotime` a one-off rather than an edit.
+
+# Trees to scan for workspaces. Entries are "[LABEL:]path", separated by
+# whitespace or newlines; the LABEL becomes the menu section heading, and
+# without one the directory's own name is used (so "$HOME/projects" alone
+# heads its section PROJECTS). Paths must not contain spaces.
+#
+# One line per root reads better once there are more than two:
+GOTIME_ROOTS="COURSES:$HOME/courseware
+PROJECTS:$HOME/projects
+SCRATCH:$HOME/tmp/experiments"
+
+# An always-present first window, opened here and running GOTIME_CMD. This is
+# the second context you want in every session regardless of what you picked —
+# a notes vault, a dotfiles repo, an issue tracker checkout. Leave it empty for
+# no pinned window, and gotime builds a two-window session instead.
+#
+# The label is the tmux window name, so keep it short:
+GOTIME_PIN="notes:$HOME/vaults/notes"
+
+# tmux session name. Change it if you want more than one gotime session alive
+# at a time — GOTIME_SESSION=side gotime some-project.
+GOTIME_SESSION="gotime"
+
+# Command started in the pinned window and the selected window. The "local"
+# window never runs it; that one is always a plain shell in ~.
+GOTIME_CMD="claude"
