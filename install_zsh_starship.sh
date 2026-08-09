@@ -56,8 +56,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 #                   PRETTY OUTPUT — (KEEP IN SYNC WITH LINUX/BASE_FUNCTIONS.SH)
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Verified identical to linux/base_functions.sh by tests/test-theme-sync.sh.
-# QOL_SEL (selection-background ink) is set here but has no reader yet —
-# nothing consumes it until the interactive helpers land in Task 8.
+# Several inks have no reader in any one script that carries this block —
+# a token ink with no consumer is suppressed, not deleted, because dropping a
+# color from a palette copy makes it a worse copy.
 # shellcheck disable=SC2034
 qol_init_color() {
     if [[ -n "${NO_COLOR:-}" ]]; then

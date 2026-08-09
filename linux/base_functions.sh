@@ -35,8 +35,9 @@
 #   NO_COLOR         — set to disable color entirely (wins over everything)
 #   QOL_FORCE_COLOR  — set to keep color when stdout is not a TTY (e.g. less -R)
 #   QOL_COLOR_DEPTH  — truecolor (default) | 256 | 8 | none
-# QOL_SEL (selection-background ink) is set here but has no reader yet —
-# nothing consumes it until the interactive helpers land in Task 8.
+# Several inks have no reader in any one script that carries this block —
+# a token ink with no consumer is suppressed, not deleted, because dropping a
+# color from a palette copy makes it a worse copy.
 # shellcheck disable=SC2034
 qol_init_color() {
     if [[ -n "${NO_COLOR:-}" ]]; then
