@@ -5,8 +5,17 @@
 # Source this from .bashrc / .zshrc:
 #     source /path/to/shell-login-settings.sh
 #
-# Output here is deliberately compact (no separator lines) because these
-# functions run inside interactive login shells.
+# Output here is deliberately compact (no separator lines, no banner, no
+# phases) because these functions run inside interactive login shells, not as
+# a run with a beginning and an end.
+#
+# It carries the design system's badge words but not its ink. This file is
+# sourced from .bashrc / .zshrc and must stay dependency-free — pulling in the
+# theme block would make a login shell pay for a palette to print at most two
+# lines. What it prints is exactly what the log_* helpers emit at
+# QOL_COLOR_DEPTH=none, so these lines still align with, and grep alongside,
+# the output of every other script in the repo:
+#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
 
 # Authenticate to GitHub over SSH, reusing a running ssh-agent when possible.
 gitssh() {
@@ -14,8 +23,8 @@ gitssh() {
     local key_file="$HOME/.ssh/$key_name"
 
     if [ ! -f "$key_file" ]; then
-        printf '%s\n' "⚠️   No SSH key named '$key_name' found in ~/.ssh." \
-                      "    Cannot authenticate to GitHub without an SSH key." >&2
+        printf '%s\n' "▌ WARN   No SSH key named '$key_name' found in ~/.ssh." \
+                      "         Cannot authenticate to GitHub without an SSH key." >&2
         return 1
     fi
 
@@ -25,22 +34,24 @@ gitssh() {
     ssh-add -l >/dev/null 2>&1 || agent_rc=$?
     if [ "$agent_rc" -eq 2 ]; then
         if ! eval "$(ssh-agent -s)" >/dev/null; then
-            printf '%s\n' "❌  Could not start ssh-agent." >&2
+            printf '%s\n' "▌ STOP   Could not start ssh-agent." >&2
             return 1
         fi
     fi
 
     if ! ssh-add "$key_file" >/dev/null 2>&1; then
-        printf '%s\n' "❌  Could not add '$key_name' to the ssh-agent." >&2
+        printf '%s\n' "▌ STOP   Could not add '$key_name' to the ssh-agent." \
+                      "         Check the key's passphrase and permissions (chmod 600)." >&2
         return 1
     fi
 
     # GitHub always closes the test connection, so check the banner text
     # rather than the ssh exit status.
     if ssh -T git@github.com 2>&1 | grep -q "successfully authenticated"; then
-        printf '%s\n' "✅  GitHub Authentication: Success."
+        printf '%s\n' "▌ PASS   GitHub authentication succeeded."
     else
-        printf '%s\n' "❌  GitHub Authentication: Failed." >&2
+        printf '%s\n' "▌ STOP   GitHub authentication failed." \
+                      "         Check the key is registered at https://github.com/settings/keys" >&2
         return 1
     fi
 }
