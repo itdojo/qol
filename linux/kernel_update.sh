@@ -49,6 +49,14 @@
 #    kernel; only a reboot does. The script now offers to point the bootloader
 #    at the new kernel and reboot into it, and prints how to switch later when
 #    the offer is declined.
+#  - ACTIVATE now refuses to boot a kernel that cannot boot. The phase shipped
+#    trusting report_kernel_status, which reads /usr/lib/modules — a directory
+#    the linux-modules package fills before linux-image has done anything. A
+#    failed install left vmlinuz in /boot with no initramfs beside it, the run
+#    offered to reboot into it, and the reboot panicked with "VFS: Unable to
+#    mount root fs on unknown-block(0,0)". The offer is now gated on the
+#    vmlinuz/initrd pair existing and on dpkg having no unconfigured kernel
+#    packages, and a run that installed a broken kernel exits non-zero.
 #
 # This script relies on the availability of the base_functions.sh file. If it
 # is not found, it will be downloaded from https://github.com/itdojo/qol.
@@ -155,6 +163,53 @@ report_kernel_status() {
 }
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: can the named kernel actually boot?
+#
+# report_kernel_status names the newest kernel from /usr/lib/modules, which the
+# linux-modules package populates. That says nothing about /boot. When a kernel
+# install fails partway — modules unpacked, linux-image postinst dead before
+# update-initramfs ran — /usr/lib/modules names a kernel that has no initramfs,
+# and update-grub happily writes it a menuentry with no initrd line. Booting
+# that entry panics: "VFS: Unable to mount root fs on unknown-block(0,0)".
+#
+# Sets KERNEL_BOOT_PROBLEM to the reason on failure. Returns 0 when the kernel
+# looks bootable OR when this system does not use the vmlinuz/initrd layout at
+# all — Raspberry Pi OS boots kernel8.img from firmware and has no initramfs to
+# find, so there is nothing here to veto.
+#
+# BOOT_DIR is overridable so the test suite can point this at a fixture tree.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+kernel_boot_files_ok() {
+  local kver="$1" boot="${BOOT_DIR:-/boot}"
+  KERNEL_BOOT_PROBLEM=""
+
+  compgen -G "$boot/vmlinuz-*" >/dev/null 2>&1 || return 0
+
+  if [ ! -f "$boot/vmlinuz-$kver" ]; then
+    KERNEL_BOOT_PROBLEM="$boot/vmlinuz-$kver does not exist"
+    return 1
+  fi
+  if [ ! -s "$boot/initrd.img-$kver" ]; then
+    KERNEL_BOOT_PROBLEM="$boot/initrd.img-$kver is missing or empty (no initramfs was built)"
+    return 1
+  fi
+  return 0
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: list kernel packages dpkg wants installed but could not finish.
+# "iF"/"iU"/"iH" mean unpacked-but-not-configured: the postinst that builds the
+# initramfs and runs update-grub never completed. "ii" is fine and "rc"/"un" are
+# packages that are simply gone, so only a want-install/status-broken pair counts.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+half_installed_kernel_packages() {
+  command -v dpkg-query >/dev/null 2>&1 || return 0
+  dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' \
+    'linux-image*' 'linux-modules*' 2>/dev/null \
+    | awk '$1 ~ /^i/ && $1 != "ii" { print $2 }'
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Helper: echo the path to grub.cfg, or nothing when this system has no GRUB.
 # Raspberry Pi OS boots straight from the firmware and has no bootloader menu
 # to configure, so "no GRUB" is a normal answer, not an error.
@@ -229,6 +284,14 @@ grub_entry_for_kernel() {
 set_default_kernel() {
   local kver="$1"
   local cfg current entry bak tmp rc
+
+  # Never point a bootloader at a kernel that cannot boot. The caller checks
+  # this too and gives a better message; this is the backstop for any other
+  # path into here.
+  if ! kernel_boot_files_ok "$kver"; then
+    log_err "$kver is not bootable: $KERNEL_BOOT_PROBLEM"
+    return 1
+  fi
 
   if ! cfg="$(find_grub_cfg)"; then
     log_info "No GRUB menu on this system; it boots the newest installed kernel on its own."
@@ -318,7 +381,10 @@ reboot_now() {
 # No `clear` here. An installer that blanks the scrollback has destroyed the
 # record of whatever the user ran before it; the banner is the boundary now.
 REBOOT_NEEDED=""
-ACTIVATE_KERNEL=""   # set once the bootloader points at the new kernel and a reboot is owed
+ACTIVATE_KERNEL=""       # set once the bootloader points at the new kernel and a reboot is owed
+ACTIVATE_BLOCKED=""      # set when the new kernel cannot boot, so the offer is withheld
+KERNEL_INSTALL_FAILED="" # set when the install step itself reported failure
+KERNEL_BOOT_PROBLEM=""   # why the new kernel cannot boot, set by kernel_boot_files_ok
 
 banner "KERNEL UPDATER" "linux · pi · kali · debian · ubuntu"
 
@@ -467,9 +533,17 @@ else
 
     log_step "Installing latest mainline kernel..."
     mainline install-latest
-    check_status "mainline install-latest" $?
+    mainline_rc=$?
+    check_status "mainline install-latest" "$mainline_rc"
 
+    # --fix-broken may still rescue a half-finished install, so this is a
+    # warning rather than the decision. What the ACTIVATE gate reads off /boot
+    # afterwards is what decides whether the new kernel is safe to boot.
     apt -y --fix-broken install
+    if [ "$mainline_rc" -ne 0 ]; then
+      KERNEL_INSTALL_FAILED=1
+      log_warn "The mainline install did not finish cleanly. Verifying what landed in /boot."
+    fi
   fi
 fi
 
@@ -485,31 +559,63 @@ report_kernel_status
 if [ -n "$REBOOT_NEEDED" ]; then
   log_phase "ACTIVATE"
   log_info "$REBOOT_NEEDED is installed but $running_kernel is still running."
-  log_warn "Rebooting closes every open program and drops any SSH session to this host."
 
-  # Deliberately NOT ask_confirm: that helper returns yes whenever ASSUME_YES is
-  # set, and this script has no --yes flag to document that. A stray ASSUME_YES
-  # in the environment must not be what reboots a machine out from under someone.
-  # Borrow ask_confirm's shape — ASK badge, jade caret — not its semantics.
-  log_ask "Boot into $REBOOT_NEEDED now (set it as the default boot entry, then reboot)?"
-  printf '    %s❯%s %s[y/N]%s ' "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
-  read -r activate_confirm
-  if [[ $activate_confirm =~ ^[Yy]$ ]]; then
-    if set_default_kernel "$REBOOT_NEEDED"; then
-      ACTIVATE_KERNEL=1
-    else
-      log_warn "Could not guarantee $REBOOT_NEEDED is the default. Not rebooting."
-    fi
+  # Gate the offer on the new kernel being able to boot. A half-finished install
+  # leaves /usr/lib/modules naming a kernel that /boot cannot start, and the
+  # reboot lands on a panic instead of a login prompt.
+  activate_block=""
+  if ! kernel_boot_files_ok "$REBOOT_NEEDED"; then
+    activate_block="$KERNEL_BOOT_PROBLEM"
   else
-    log_ok "Staying on $running_kernel for now."
+    broken_kernel_pkgs="$(half_installed_kernel_packages)"
+    if [ -n "$broken_kernel_pkgs" ]; then
+      activate_block="dpkg left these kernel packages unconfigured: $(printf '%s' "$broken_kernel_pkgs" | tr '\n' ' ')"
+    fi
+  fi
+
+  if [ -n "$activate_block" ]; then
+    ACTIVATE_BLOCKED=1
+    log_err "Not offering to boot $REBOOT_NEEDED — $activate_block"
+    log_warn "Booting a kernel with no initramfs panics with:"
+    log_warn "  VFS: Unable to mount root fs on unknown-block(0,0)"
+    log_warn "Staying on $running_kernel, which still boots."
+  else
+    log_warn "Rebooting closes every open program and drops any SSH session to this host."
+
+    # Deliberately NOT ask_confirm: that helper returns yes whenever ASSUME_YES is
+    # set, and this script has no --yes flag to document that. A stray ASSUME_YES
+    # in the environment must not be what reboots a machine out from under someone.
+    # Borrow ask_confirm's shape — ASK badge, jade caret — not its semantics.
+    log_ask "Boot into $REBOOT_NEEDED now (set it as the default boot entry, then reboot)?"
+    printf '    %s❯%s %s[y/N]%s ' "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
+    read -r activate_confirm
+    if [[ $activate_confirm =~ ^[Yy]$ ]]; then
+      if set_default_kernel "$REBOOT_NEEDED"; then
+        ACTIVATE_KERNEL=1
+      else
+        log_warn "Could not guarantee $REBOOT_NEEDED is the default. Not rebooting."
+      fi
+    else
+      log_ok "Staying on $running_kernel for now."
+    fi
   fi
 fi
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Completion
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-log_complete "KERNEL UPGRADE COMPLETE"
-if [ -n "$ACTIVATE_KERNEL" ]; then
+if [ -n "$ACTIVATE_BLOCKED" ] || [ -n "$KERNEL_INSTALL_FAILED" ]; then
+  log_complete "KERNEL UPGRADE INCOMPLETE"
+else
+  log_complete "KERNEL UPGRADE COMPLETE"
+fi
+if [ -n "$ACTIVATE_BLOCKED" ]; then
+  log_next "Repair the install, then rerun this script:"
+  log_next "  sudo dpkg --configure -a"
+  log_next "  sudo apt -y --fix-broken install"
+  log_next "If it still will not configure, remove the broken kernel and stay on $running_kernel:"
+  log_next "  sudo apt -y purge 'linux-image*$REBOOT_NEEDED*' 'linux-modules*$REBOOT_NEEDED*' && sudo update-grub"
+elif [ -n "$ACTIVATE_KERNEL" ]; then
   log_next "Rebooting into $REBOOT_NEEDED now."
   log_next "If it misbehaves, pick the old kernel at boot: hold Shift (BIOS) or Esc (UEFI), then Advanced options."
 elif [ -n "$REBOOT_NEEDED" ]; then
@@ -528,3 +634,10 @@ echo
 if [ -n "$ACTIVATE_KERNEL" ]; then
   reboot_now 10
 fi
+
+# A run that installed a broken kernel is not a successful run, even though the
+# machine it ran on is still fine. Exit non-zero so a caller can tell.
+if [ -n "$ACTIVATE_BLOCKED" ] || [ -n "$KERNEL_INSTALL_FAILED" ]; then
+  exit 1
+fi
+exit 0
