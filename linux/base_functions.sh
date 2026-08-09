@@ -298,18 +298,31 @@ ask_value() {
 # how far to move the cursor back up when redrawing.
 _ask_choice_draw() {
     local heading="$1" sel="$2"; shift 2
-    local i=0 item label hint
+    local i=0 item label hint plain pad cols
+    cols="$(_term_cols)"
     printf '\n %s%s%s%s\n' "$QOL_BOLD" "$QOL_STEP" "$heading" "$QOL_RESET"
     for item in "$@"; do
         label="${item%%|*}"
         hint="${item#*|}"; [[ "$hint" == "$item" ]] && hint=""
+        # Pad every row out to the full width with real spaces. The selection
+        # bar has to reach the right edge, and CLR_EOL cannot carry it there:
+        # screen and tmux report no `bce`, so ESC[K erases to the default
+        # background and cuts the bar off where the text ended. Padding the
+        # unselected rows is what paints over the bar as it moves away.
+        # Three leading columns in both branches: " ❯ " when selected, three
+        # spaces when not. Measure the same shape the row actually prints.
+        printf -v plain '   %2d   %-18s %s' "$(( i + 1 ))" "$label" "$hint"
+        pad=$(( cols - ${#plain} ))
+        (( pad < 0 )) && pad=0
         if (( i == sel )); then
-            printf '%s%s%s ❯ %2d   %-18s %s%s\n' \
-                "$QOL_SEL" "$QOL_BOLD" "$QOL_PASS" "$(( i + 1 ))" "$label" "$hint" "$QOL_RESET"
+            printf '%s%s%s ❯ %2d   %-18s %s%*s%s\n' \
+                "$QOL_SEL" "$QOL_BOLD" "$QOL_PASS" "$(( i + 1 ))" "$label" "$hint" \
+                "$pad" '' "$QOL_RESET"
         else
-            printf '   %s%2d%s   %s%-18s%s %s%s%s\n' \
+            printf '   %s%2d%s   %s%-18s%s %s%s%s%*s\n' \
                 "$QOL_META" "$(( i + 1 ))" "$QOL_RESET" \
-                "$QOL_FG" "$label" "$QOL_RESET" "$QOL_META" "$hint" "$QOL_RESET"
+                "$QOL_FG" "$label" "$QOL_RESET" "$QOL_META" "$hint" "$QOL_RESET" \
+                "$pad" ''
         fi
         i=$(( i + 1 ))
     done

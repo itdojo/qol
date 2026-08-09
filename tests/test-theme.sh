@@ -249,6 +249,32 @@ assert_not_contains "$(ask_choice "H" 1 "a|x" "b|y" 2>/dev/null)" "H" \
     "ask_choice's stdout carries no heading"
 } < /dev/null
 
+# ‒‒ ask_choice row geometry ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# The selection bar has to reach the right edge, which means the row is padded
+# with real spaces rather than erased with CLR_EOL: screen and tmux have no
+# `bce`, so ESC[K there erases to the default background and truncates the bar
+# exactly where it started. Padding an unselected row matters just as much —
+# it is what paints over the bar the row is losing.
+printf '\nask_choice rows fill the width so the selection bar spans it\n'
+QOL_COLOR_DEPTH=none qol_init_color
+_rows="$(_ask_choice_draw "DRIVER" 0 "overlay2|fast" "vfs|slow")"
+_cols="$(_term_cols)"
+_sel="$(printf '%s\n' "$_rows" | sed -n '3p')"
+_un="$(printf '%s\n' "$_rows" | sed -n '4p')"
+assert_eq "$_cols" "${#_sel}" "the selected row is padded to the terminal width"
+assert_eq "$_cols" "${#_un}"  "an unselected row is padded to the terminal width"
+
+printf '\npadding survives a hint longer than the column it sits in\n'
+_rows="$(_ask_choice_draw "DRIVER" 0 "a|$(printf 'x%.0s' $(seq 1 200))" "b|short")"
+_sel="$(printf '%s\n' "$_rows" | sed -n '3p')"
+TESTS_RUN=$((TESTS_RUN + 1))
+if (( ${#_sel} >= _cols )); then
+    printf '  ok   an over-long row is never truncated to less than the width\n'
+else
+    TESTS_FAILED=$((TESTS_FAILED + 1))
+    printf '  FAIL an over-long row shrank below the width (%d < %d)\n' "${#_sel}" "$_cols"
+fi
+
 # A here-string, not a pipe: the right side of a pipe is a subshell, so the
 # _KEY it set would be discarded before the assertion could read it.
 printf '\n_read_key decodes without a TTY\n'
