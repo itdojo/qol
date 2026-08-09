@@ -302,16 +302,16 @@ command -v needrestart >/dev/null || install_packages needrestart
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_step "Gathering Linux release info..."
 
-# Determine if this is a Raspberry Pi 🥧
+# Determine if this is a Raspberry Pi
 model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
 if [ -n "$model" ]; then
-  printf "%s\n" "🥧 I am a $(style_text "Raspberry Pi" bold red)."
+  log_info "Raspberry Pi detected:$model"
 fi
 
 # Source the os-release file
 if [ -f /etc/os-release ]; then
   source /etc/os-release
-  printf "%s\n" "OS Version: $PRETTY_NAME ($VERSION_CODENAME)"
+  log_info "OS version: $PRETTY_NAME ($VERSION_CODENAME)"
 else
   log_err "/etc/os-release not found. Cannot determine distribution. Exiting."
   exit 1
@@ -329,12 +329,11 @@ APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 if [ -n "$model" ]; then
   # ---- Raspberry Pi -------------------------------------------------------
-  log_step "Installing Docker for $model..."
-  printf "%s\n" "Performing $(style_text "Raspberry Pi" bold red) Docker installation..."
+  log_step "Installing Docker for$model..."
 
   remove_conflicting_packages
   curl -sSL https://get.docker.com | sh
-  check_status "🥧  Raspberry Pi Docker installation" $?
+  check_status "Raspberry Pi Docker installation" $?
 
   log_phase "SERVICE"
   enable_and_start_docker
@@ -343,7 +342,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
   # Kali is a rolling release based on Debian. Use the appropriate Debian
   # codename for Docker's apt repo.
-  log_info "I am a $(style_text "$PRETTY_NAME" bold blue) installation."
+  log_info "$PRETTY_NAME detected."
   log_step "Installing Docker for $PRETTY_NAME..."
 
   remove_conflicting_packages
@@ -379,7 +378,7 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
 
 elif [ "$ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
-  log_info "I am a $(style_text "$PRETTY_NAME" bold blue) installation."
+  log_info "$PRETTY_NAME detected."
 
   if ! is_supported_codename "$VERSION_CODENAME" "${SUPPORTED_DEBIAN_CODENAMES[@]}"; then
     log_warn "Debian codename '$VERSION_CODENAME' is not in Docker's supported list (${SUPPORTED_DEBIAN_CODENAMES[*]})."
@@ -429,8 +428,8 @@ else
   # Covers Ubuntu, Pop!_OS, Linux Mint, Ubuntu MATE/Studio/Kylin/Budgie,
   # elementary OS, Zorin, KDE neon, etc.
   log_step "Installing Docker for $PRETTY_NAME..."
-  log_info "This is not a $(style_text "Raspberry Pi" normal red), $(style_text "Kali" normal blue) or $(style_text "Debian" normal blue) installation."
-  printf "%s\n" "    Treating as Ubuntu / Ubuntu-derivative. Apt suite: $(style_text "$APT_CODENAME" bold green)"
+  log_info "Not a Raspberry Pi, Kali or Debian installation; treating as Ubuntu / Ubuntu-derivative."
+  log_info "Apt suite: $APT_CODENAME"
 
   # Validate the codename. If we can't, fall back to get.docker.com which
   # has its own per-distro logic. This avoids a confusing 404 on the apt
