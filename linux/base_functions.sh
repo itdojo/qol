@@ -109,10 +109,21 @@ qol_init_color() {
 qol_init_color
 
 # Terminal width, falling back to 80 with no TTY (cron, CI, pipes).
+#
+# Ask the terminal, not terminfo. `tput cols 2>/dev/null` inside a command
+# substitution answers 80 however wide the window is: with stdout captured,
+# ncurses reads the window size off stderr instead, and that redirect throws
+# the only usable fd away. Every rule, bookend and selection bar in this file
+# was pinned to 80 columns by it. stty asks /dev/tty directly, so no amount of
+# nesting can hide the answer. COLUMNS still wins when set, as an override.
 _term_cols() {
-    local cols
-    cols="$(tput cols 2>/dev/null)" || cols=80
-    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    local cols="${COLUMNS:-}"
+    if [[ ! "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
+        cols="$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)"
+    fi
+    if [[ ! "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
+        cols=80
+    fi
     printf '%s' "$cols"
 }
 

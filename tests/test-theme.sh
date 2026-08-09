@@ -249,6 +249,32 @@ assert_not_contains "$(ask_choice "H" 1 "a|x" "b|y" 2>/dev/null)" "H" \
     "ask_choice's stdout carries no heading"
 } < /dev/null
 
+# ‒‒ terminal width ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Every full-width element in this file — rules, bookends, the selection bar —
+# is only as correct as _term_cols. It used to run `tput cols 2>/dev/null`
+# inside a command substitution, which reports the terminfo default of 80 no
+# matter how wide the terminal is: with stdout captured, ncurses falls back to
+# reading the size off stderr, and that redirect throws the fd away.
+printf '\n_term_cols honors an explicit COLUMNS\n'
+QOL_COLOR_DEPTH=none qol_init_color
+assert_eq "120" "$(COLUMNS=120 _term_cols)" "COLUMNS=120 is reported as 120"
+assert_eq "40"  "$(COLUMNS=40  _term_cols)" "COLUMNS=40 is reported as 40"
+
+printf '\nnonsense COLUMNS values fall back rather than propagate\n'
+assert_eq "80" "$(COLUMNS=0 _term_cols)"    "COLUMNS=0 falls back to 80"
+assert_eq "80" "$(COLUMNS=-5 _term_cols)"   "a negative COLUMNS falls back to 80"
+assert_eq "80" "$(COLUMNS=wide _term_cols)" "a non-numeric COLUMNS falls back to 80"
+
+# Measure with ${#var}, which counts characters. `wc -c` counts bytes, and the
+# rule glyphs are three bytes each in UTF-8 — a 40-column rule weighs 120.
+printf '\nthe full-width elements follow the reported width\n'
+for w in 40 120; do
+    _line="$(COLUMNS=$w bash -c 'source '"$LIB"'; QOL_COLOR_DEPTH=none qol_init_color; printline')"
+    assert_eq "$w" "${#_line}" "printline is $w columns wide"
+    _line="$(COLUMNS=$w bash -c 'source '"$LIB"'; QOL_COLOR_DEPTH=none qol_init_color; log_phase T' | sed -n '2p')"
+    assert_eq "$w" "${#_line}" "log_phase rule is $w columns wide"
+done
+
 # ‒‒ ask_choice row geometry ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # The selection bar has to reach the right edge, which means the row is padded
 # with real spaces rather than erased with CLR_EOL: screen and tmux have no

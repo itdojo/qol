@@ -146,10 +146,19 @@ find_slug() {  # echo the index of the item whose slug == $1, else nothing
 section_title() { [[ "$1" == "course" ]] && printf 'COURSES' || printf 'PROJECTS'; }
 
 # --- drawing ----------------------------------------------------------------
+# Ask the terminal, not terminfo. `tput cols 2>/dev/null` inside a command
+# substitution answers 80 however wide the window is: with stdout captured,
+# ncurses reads the window size off stderr instead, and that redirect throws
+# the only usable fd away. It is why the rules here stopped short of the right
+# edge. stty asks /dev/tty directly. Kept in step with base_functions.sh.
 term_cols() {
-    local cols
-    cols="$(tput cols 2>/dev/null)" || cols=80
-    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
+    local cols="${COLUMNS:-}"
+    if [[ ! "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
+        cols="$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)"
+    fi
+    if [[ ! "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
+        cols=80
+    fi
     printf '%s' "$cols"
 }
 
