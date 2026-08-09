@@ -1253,7 +1253,7 @@ cd ~/projects/qol && bash -n gotime && echo "PARSE OK"
 
 Expected: `PARSE OK`.
 
-- [ ] **Step 8: Run it and compare against the reference**
+- [x] **Step 8: Run it and compare against the reference**  <!-- verified 2026-08-08 from a screen recording; also surfaced the redraw flicker fixed in c7dc1e6 -->
 
 ```bash
 cd ~/projects/qol && ./gotime
@@ -1261,7 +1261,7 @@ cd ~/projects/qol && ./gotime
 
 Expected: jade rules, a `⛩ GO TIME ⛩` banner, violet `COURSES` / `PROJECTS` headings, a jade-on-`#241D3D` selection bar, and jade keycaps in the footer. Press `q` to quit. Compare against the Interactive section of the rendered reference.
 
-- [ ] **Step 9: Verify the 256 tier renders**
+- [x] **Step 9: Verify the 256 tier renders**  <!-- verified 2026-08-08; sampled colors match the xterm-256 palette, fg and sel-bg exactly -->
 
 ```bash
 cd ~/projects/qol && QOL_COLOR_DEPTH=256 ./gotime
