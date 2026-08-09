@@ -37,89 +37,48 @@ readonly SCRIPT_NAME="$(basename "$0")"
 readonly VERSION="2026-07"
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Output helpers — repo-standard theme (keep in sync with linux/base_functions.sh)
+#                                          OUTPUT THEME (SOURCED, NOT EMBEDDED)
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Decide once whether to emit ANSI colors. Colors are skipped when stdout is
-# not a terminal (pipes, logs) or NO_COLOR is set.
-if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-    QOL_COLOR=1
-else
-    QOL_COLOR=""
+# This script is Linux-only, so it sources the shared library rather than
+# carrying its own copy of the theme. A copy is one more thing to drift; the
+# vault's build-design-tokens.py can only check the copies it knows about.
+# Same auto-download fallback as kernel_update.sh, so a lone scp'd file still
+# works. Palette and rules:
+#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+BASE_FUNCTIONS="$(dirname "$(realpath "$0")")/base_functions.sh"
+BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
+
+if [[ ! -f "$BASE_FUNCTIONS" ]]; then
+    # log_* is not available yet — this is the fetch that makes it available.
+    # Hand-write the same 9-column prefix the helpers emit at QOL_DEPTH=none.
+    printf '%s\n' "▌ STEP   base_functions.sh not found. Downloading from GitHub..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS"
+    else
+        wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS"
+    fi || {
+        printf '%s\n' "▌ STOP   Failed to download base_functions.sh." \
+                      "▌ STOP   Get it from https://github.com/itdojo/qol." >&2
+        exit 1
+    }
 fi
 
-# Print a separator line the width of the terminal.
-# Usage: printline [solid|dentistry]
-printline() {
-    local sep cols line
-    case "${1:-solid}" in
-        solid)     sep="─" ;;
-        dentistry) sep="⏥" ;;
-        *)         sep="─" ;;
-    esac
-    cols="$(tput cols 2>/dev/null)" || cols=80
-    [[ "$cols" =~ ^[0-9]+$ ]] || cols=80
-    printf -v line '%*s' "$cols" ''
-    printf '%s\n' "${line// /$sep}"
+# shellcheck source=base_functions.sh
+source "$BASE_FUNCTIONS"
+command -v log_phase >/dev/null 2>&1 || {
+    printf '%s\n' "▌ STOP   base_functions.sh is outdated (no log_phase)." \
+                  "▌ STOP   Update it from https://github.com/itdojo/qol." >&2
+    exit 1
 }
 
-# Print styled text with no separator.
-# Usage: style_text "text" [normal|bold] [red|green|yellow|blue]
-style_text() {
-    local text="$1" weight="${2:-normal}" color="${3:-}"
-    local weight_code color_code sgr
-    case "$weight" in
-        normal) weight_code=0 ;;
-        bold)   weight_code=1 ;;
-        *)      weight_code=0 ;;
-    esac
-    case "$color" in
-        red)    color_code=31 ;;
-        green)  color_code=32 ;;
-        yellow) color_code=33 ;;
-        blue)   color_code=34 ;;
-        *)      color_code="" ;;
-    esac
-    if [[ -z "$QOL_COLOR" ]] || [[ -z "$color_code" && "$weight_code" -eq 0 ]]; then
-        printf '%s\n' "$text"
-        return 0
-    fi
-    if [[ -n "$color_code" ]]; then
-        sgr="${weight_code};${color_code}"
-    else
-        sgr="$weight_code"
-    fi
-    printf '\033[%sm%s\033[0m\n' "$sgr" "$text"
-}
-
-# Separator + styled text: the repo-standard log line.
-format_font() {
-    printline
-    style_text "$1" "${2:-bold}" "${3:-yellow}"
-}
-
-title() {
-    printline dentistry
-    style_text "$1" bold blue
-    printline dentistry
-}
-
-section() { format_font "🔸  $1" bold yellow;   }
-ok()      { format_font "✅  $1" bold green;    }
-warn()    { format_font "⚠️   $1" bold yellow;  }
-fail()    { format_font "❌  $1" bold red >&2;  }
-info()    { format_font "ℹ️   $1" bold blue;    }
-
-# Inline prompt feedback (no separator; used inside input loops so invalid
-# entries don't fill the screen with lines).
-prompt_warn() { style_text "  ⚠️   $1" bold yellow; }
-prompt_err()  { style_text "  ❌  $1" bold red >&2; }
-
+# Override the library's check_status, which reports and returns. Here a failed
+# step means a half-written profile, so the run stops instead of continuing.
 check_status() {
     local desc="$1" rc="$2"
     if [[ $rc -eq 0 ]]; then
-        ok "$desc"
+        log_ok "$desc"
     else
-        fail "$desc (rc=$rc)"
+        log_err "$desc (rc=$rc)"
         exit "$rc"
     fi
 }
@@ -129,7 +88,7 @@ check_status() {
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 handle_interrupt() {
     printf "\n"
-    warn "Interrupted. If a profile file was written, it remains in place."
+    log_warn "Interrupted. If a profile file was written, it remains in place."
     exit 130
 }
 trap handle_interrupt INT TERM
@@ -139,7 +98,7 @@ trap handle_interrupt INT TERM
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 require_root() {
     if [[ ${EUID} -ne 0 ]]; then
-        fail "Run as root (try: sudo $SCRIPT_NAME)"
+        log_err "Run as root (try: sudo $SCRIPT_NAME)"
         exit 1
     fi
 }
@@ -150,7 +109,7 @@ require_cmds() {
         command -v "$c" >/dev/null 2>&1 || missing+=("$c")
     done
     if (( ${#missing[@]} > 0 )); then
-        fail "Missing required command(s): ${missing[*]}"
+        log_err "Missing required command(s): ${missing[*]}"
         exit 1
     fi
 }
@@ -166,7 +125,7 @@ generate_uuid() {
     elif [[ -r /proc/sys/kernel/random/uuid ]]; then
         cat /proc/sys/kernel/random/uuid
     else
-        fail "No UUID source found (uuidgen, uuid, or /proc/sys/kernel/random/uuid)"
+        log_err "No UUID source found (uuidgen, uuid, or /proc/sys/kernel/random/uuid)"
         return 1
     fi
 }
@@ -197,33 +156,23 @@ discover_interfaces() {
 
     if (( ${#IFACE_DEV[@]} == 0 )); then
         if [[ -n "$want" ]]; then
-            fail "No $want interface available."
+            log_err "No $want interface available."
         else
-            fail "No ethernet or Wi-Fi interfaces found via nmcli."
+            log_err "No ethernet or Wi-Fi interfaces found via nmcli."
         fi
         return 1
     fi
 }
 
 select_interface() {
-    local i
-    printf "\n"
-    style_text "  Available interfaces:" bold
+    local i rows=() sel
     for i in "${!IFACE_DEV[@]}"; do
-        printf "    [%d] %-12s %-10s (%s)\n" \
-            "$((i+1))" "${IFACE_DEV[$i]}" "${IFACE_TYPE[$i]}" "${IFACE_STATE[$i]}"
+        rows+=("${IFACE_DEV[$i]}|${IFACE_TYPE[$i]} — ${IFACE_STATE[$i]}")
     done
-
-    local sel=""
-    while true; do
-        read -rp "  Select an interface (1-${#IFACE_DEV[@]}): " sel
-        if [[ "$sel" =~ ^[0-9]+$ ]] && (( sel >= 1 && sel <= ${#IFACE_DEV[@]} )); then
-            SELECTED_DEV="${IFACE_DEV[$((sel-1))]}"
-            SELECTED_TYPE="${IFACE_TYPE[$((sel-1))]}"
-            return 0
-        fi
-        prompt_warn "Invalid selection: '$sel'"
-    done
+    sel="$(ask_choice "SELECT AN INTERFACE" 1 "${rows[@]}")"
+    SELECTED_DEV="${IFACE_DEV[$((sel-1))]}"
+    SELECTED_TYPE="${IFACE_TYPE[$((sel-1))]}"
+    return 0
 }
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
@@ -231,16 +180,16 @@ select_interface() {
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 validate_ssid() {
     local ssid="$1"
-    [[ -z "$ssid" ]] && { prompt_err "SSID cannot be empty."; return 1; }
-    (( ${#ssid} > 32 )) && { prompt_err "SSID must be 32 characters or fewer."; return 1; }
+    [[ -z "$ssid" ]] && { log_err "SSID cannot be empty."; return 1; }
+    (( ${#ssid} > 32 )) && { log_err "SSID must be 32 characters or fewer."; return 1; }
     return 0
 }
 
 validate_psk() {
     local psk="$1"
-    [[ -z "$psk" ]] && { prompt_err "Passphrase cannot be empty."; return 1; }
+    [[ -z "$psk" ]] && { log_err "Passphrase cannot be empty."; return 1; }
     (( ${#psk} < 8 || ${#psk} > 63 )) && {
-        prompt_err "Passphrase must be 8-63 characters (got ${#psk})."
+        log_err "Passphrase must be 8-63 characters (got ${#psk})."
         return 1
     }
     return 0
@@ -249,14 +198,14 @@ validate_psk() {
 validate_ipv4() {
     local ip="$1"
     [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || {
-        prompt_err "Not a valid IPv4 address: '$ip'"
+        log_err "Not a valid IPv4 address: '$ip'"
         return 1
     }
     local IFS=. octets octet
     read -ra octets <<< "$ip"
     for octet in "${octets[@]}"; do
         if (( 10#$octet > 255 )); then
-            prompt_err "Octet out of range in '$ip'"
+            log_err "Octet out of range in '$ip'"
             return 1
         fi
     done
@@ -266,7 +215,7 @@ validate_ipv4() {
 validate_cidr_bits() {
     local bits="$1"
     if [[ ! "$bits" =~ ^[0-9]+$ ]] || (( bits < 1 || bits > 32 )); then
-        prompt_err "Invalid CIDR prefix: '$bits' (must be 1-32)"
+        log_err "Invalid CIDR prefix: '$bits' (must be 1-32)"
         return 1
     fi
     return 0
@@ -309,72 +258,71 @@ hash_psk_for_wpa_psk() {
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Prompts
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Every pick-one below is ask_choice and every free-text field is ask_value, so
+# a question here looks the same as a question in any other qol script. The
+# validators still gate the answer — ask_value collects, it does not validate,
+# so each free-text field keeps its retry loop around the call.
 prompt_connection_type() {
-    section "Connection type"
-    printf "    [1] Wi-Fi\n"
-    printf "    [2] Ethernet\n"
-    local sel=""
-    while true; do
-        read -rp "  Select (1-2): " sel
-        case "$sel" in
-            1) WANT_TYPE="wifi"     ; return 0 ;;
-            2) WANT_TYPE="ethernet" ; return 0 ;;
-            *) prompt_warn "Invalid: '$sel'" ;;
-        esac
-    done
+    local sel
+    sel="$(ask_choice "CONNECTION TYPE" 1 \
+        "Wi-Fi|802-11-wireless profile" \
+        "Ethernet|802-3-ethernet profile")"
+    case "$sel" in
+        1) WANT_TYPE="wifi" ;;
+        2) WANT_TYPE="ethernet" ;;
+    esac
 }
 
 prompt_static_ipv4() {
     while true; do
-        read -rp "  IPv4 address (e.g., 192.168.1.100): " IP_ADDR
+        IP_ADDR="$(ask_value "IPv4 address" "192.168.1.100" "the address this machine will claim")"
         validate_ipv4 "$IP_ADDR" && break
     done
     while true; do
-        read -rp "  Prefix bits (e.g., 24): " IP_BITS
+        IP_BITS="$(ask_value "Prefix bits" "24" "CIDR mask length, 1-32")"
         validate_cidr_bits "$IP_BITS" && break
     done
     while true; do
-        read -rp "  Default gateway (e.g., 192.168.1.1): " IP_GW
+        IP_GW="$(ask_value "Default gateway" "192.168.1.1" "the router on this subnet")"
         validate_ipv4 "$IP_GW" && break
     done
-    read -rp "  DNS servers, semicolon-separated [1.1.1.1;9.9.9.9]: " IP_DNS
-    IP_DNS="${IP_DNS:-1.1.1.1;9.9.9.9}"
+    IP_DNS="$(ask_value "DNS servers" "1.1.1.1;9.9.9.9" "semicolon-separated")"
     # Allow user to type with commas; normalize to semicolons for NM.
     IP_DNS="${IP_DNS//,/;}"
 }
 
 prompt_wifi_details() {
     while true; do
-        read -rp "  SSID (1-32 chars): " SSID
+        SSID="$(ask_value "SSID" "" "1-32 characters")"
         validate_ssid "$SSID" && break
     done
 
+    # Not ask_value: the passphrase must not echo, and ask_value has no hidden
+    # mode. Borrow its shape — ASK badge, dimmed hint, jade caret — by hand.
     local plain=""
     while true; do
-        read -rsp "  Passphrase (8-63 chars, hidden): " plain
-        printf "\n"
+        log_ask "Passphrase" >&2
+        printf '         %s%s%s\n' "$QOL_META" "8-63 characters, hidden as you type" "$QOL_RESET" >&2
+        printf '    %s❯%s ' "$QOL_PASS" "$QOL_RESET" >&2
+        read -rs plain
+        printf '\n' >&2
         validate_psk "$plain" && break
     done
 
-    read -rp "  Hidden SSID? [y/N]: " HIDE_ANS
-    case "${HIDE_ANS:-N}" in
-        [Yy]*) WIFI_HIDDEN="true" ;;
-        *)     WIFI_HIDDEN="false" ;;
-    esac
+    if ask_confirm "Is this SSID hidden?" N; then
+        WIFI_HIDDEN="true"
+    else
+        WIFI_HIDDEN="false"
+    fi
 
-    section "Wi-Fi security"
-    printf "    [1] WPA2-PSK  (key-mgmt=wpa-psk)  - WPA2-Personal\n"
-    printf "    [2] WPA3-SAE  (key-mgmt=sae)     - WPA3-Personal\n"
-    local sel=""
-    while true; do
-        read -rp "  Select (1-2) [1]: " sel
-        sel="${sel:-1}"
-        case "$sel" in
-            1) KEY_MGMT="wpa-psk" ; break ;;
-            2) KEY_MGMT="sae"     ; break ;;
-            *) prompt_warn "Invalid: '$sel'" ;;
-        esac
-    done
+    local sel
+    sel="$(ask_choice "WI-FI SECURITY" 1 \
+        "WPA2-PSK|WPA2-Personal, key-mgmt=wpa-psk" \
+        "WPA3-SAE|WPA3-Personal, key-mgmt=sae")"
+    case "$sel" in
+        1) KEY_MGMT="wpa-psk" ;;
+        2) KEY_MGMT="sae" ;;
+    esac
 
     if [[ "$KEY_MGMT" == "wpa-psk" ]]; then
         PSK_FOR_FILE="$(hash_psk_for_wpa_psk "$SSID" "$plain")"
@@ -386,35 +334,25 @@ prompt_wifi_details() {
 }
 
 prompt_ipv4_method() {
-    section "IPv4 configuration"
-    printf "    [1] DHCP (auto)\n"
-    printf "    [2] Static\n"
-    local choice=""
-    while true; do
-        read -rp "  Select (1-2) [1]: " choice
-        choice="${choice:-1}"
-        case "$choice" in
-            1) IP_METHOD="auto"   ; return 0 ;;
-            2) IP_METHOD="manual" ; prompt_static_ipv4 ; return 0 ;;
-            *) prompt_warn "Invalid: '$choice'" ;;
-        esac
-    done
+    local choice
+    choice="$(ask_choice "IPV4 CONFIGURATION" 1 \
+        "DHCP|address assigned by the network" \
+        "Static|you supply address, gateway, DNS")"
+    case "$choice" in
+        1) IP_METHOD="auto" ;;
+        2) IP_METHOD="manual"; prompt_static_ipv4 ;;
+    esac
 }
 
 prompt_ipv6_method() {
-    section "IPv6 configuration"
-    printf "    [1] auto    (SLAAC)\n"
-    printf "    [2] ignore  (disabled)\n"
-    local choice=""
-    while true; do
-        read -rp "  Select (1-2) [1]: " choice
-        choice="${choice:-1}"
-        case "$choice" in
-            1) IPV6_METHOD="auto"   ; return 0 ;;
-            2) IPV6_METHOD="ignore" ; return 0 ;;
-            *) prompt_warn "Invalid: '$choice'" ;;
-        esac
-    done
+    local choice
+    choice="$(ask_choice "IPV6 CONFIGURATION" 1 \
+        "auto|SLAAC" \
+        "ignore|IPv6 disabled on this profile")"
+    case "$choice" in
+        1) IPV6_METHOD="auto" ;;
+        2) IPV6_METHOD="ignore" ;;
+    esac
 }
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
@@ -472,23 +410,20 @@ write_connection_file() {
 }
 
 reload_and_optionally_activate() {
-    section "Reloading NetworkManager"
+    log_step "Reloading NetworkManager..."
     nmcli connection reload
     check_status "nmcli connection reload" $?
 
-    local yn=""
-    read -rp "  Bring '$CONN_ID' up now? [Y/n]: " yn
-    yn="${yn:-Y}"
-    if [[ "$yn" =~ ^[Yy]$ ]]; then
-        section "Activating connection"
+    if ask_confirm "Bring '$CONN_ID' up now?" Y; then
+        log_step "Activating the connection..."
         if nmcli connection up "$CONN_ID"; then
-            ok "Connection '$CONN_ID' is up."
+            log_ok "Connection '$CONN_ID' is up."
         else
-            warn "Activation failed. Check 'nmcli connection up $CONN_ID' manually."
+            log_warn "Activation failed. Check it manually with:  nmcli connection up $CONN_ID"
         fi
     else
-        info "Skipping activation. Bring it up later with:"
-        printf "        sudo nmcli connection up '%s'\n" "$CONN_ID"
+        log_info "Skipping activation."
+        ACTIVATE_SKIPPED=1
     fi
 }
 
@@ -496,53 +431,71 @@ reload_and_optionally_activate() {
 # main
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 main() {
-    clear
-    title "🔧  NETWORK MANAGER CONNECTION MAKER  -  v.${VERSION}"
+    # No `clear`. A tool that blanks the scrollback has destroyed the record of
+    # whatever the user ran before it; the banner is the boundary now.
+    banner "NM CONNECTION MAKER" "wi-fi · ethernet · v.${VERSION}"
 
+    log_phase "PREFLIGHT"
     require_root
     require_cmds nmcli awk grep
+    # Every value below comes from a question, and the answer helpers return
+    # their default rather than blocking without a TTY. Refuse the run outright
+    # instead of writing a profile nobody chose.
+    if [[ ! -t 0 ]]; then
+        log_err "This tool is interactive and stdin is not a terminal."
+        log_err "Run it from a terminal:  sudo $SCRIPT_NAME"
+        exit 1
+    fi
 
-    section "Discovering interfaces"
+    log_step "Discovering ethernet and Wi-Fi interfaces..."
     discover_interfaces ""
-    ok "Found ${#IFACE_DEV[@]} ethernet/Wi-Fi interface(s)."
+    log_ok "Found ${#IFACE_DEV[@]} ethernet/Wi-Fi interface(s)."
 
     prompt_connection_type
     discover_interfaces "$WANT_TYPE"
     select_interface
-    ok "Selected: $SELECTED_DEV ($SELECTED_TYPE)"
+    log_ok "Selected: $SELECTED_DEV ($SELECTED_TYPE)"
 
-    section "Profile name"
     local raw_id=""
     while [[ -z "$raw_id" ]]; do
-        read -rp "  Profile ID (no spaces): " raw_id
+        raw_id="$(ask_value "Profile ID" "" "no spaces; whitespace is stripped")"
         # Strip any whitespace the user typed.
         raw_id="${raw_id//[[:space:]]/}"
     done
     CONN_ID="$(unique_connection_id "$raw_id")"
     if [[ "$CONN_ID" != "$raw_id" ]]; then
-        info "Profile '$raw_id' already exists; using '$CONN_ID' instead."
+        log_info "Profile '$raw_id' already exists; using '$CONN_ID' instead."
     fi
 
     if [[ "$SELECTED_TYPE" == "wifi" ]]; then
-        section "Wi-Fi credentials"
         prompt_wifi_details
     fi
 
     prompt_ipv4_method
     prompt_ipv6_method
 
-    section "Generating UUID"
-    UUID="$(generate_uuid)"
-    ok "UUID = $UUID"
+    # Everything is collected. Restate it before anything is written, so the
+    # user sees what they agreed to.
+    log_phase "WRITE"
+    log_ok "Profile '$CONN_ID' on $SELECTED_DEV ($SELECTED_TYPE), IPv4 $IP_METHOD, IPv6 $IPV6_METHOD."
 
-    section "Writing connection file"
+    log_step "Generating a UUID..."
+    UUID="$(generate_uuid)"
+    log_ok "UUID = $UUID"
+
+    log_step "Writing the connection file..."
     write_connection_file
-    ok "Wrote $NM_FILE (mode 600, root:root)"
+    log_ok "Wrote $NM_FILE (mode 600, root:root)"
 
     reload_and_optionally_activate
 
-    title "🏁  Done. Profile '$CONN_ID' created."
-    echo ""
+    log_complete "PROFILE '$CONN_ID' CREATED"
+    if [[ -n "${ACTIVATE_SKIPPED:-}" ]]; then
+        log_next "Bring the connection up:  sudo nmcli connection up '$CONN_ID'"
+    fi
+    log_next "Inspect it:  sudo nmcli connection show '$CONN_ID'"
+    log_next "Edit it later:  sudo nmcli connection edit '$CONN_ID'"
+    echo
 }
 
 main "$@"
