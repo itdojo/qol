@@ -34,7 +34,9 @@ set -euo pipefail
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 readonly NM_DIR="/etc/NetworkManager/system-connections"
 readonly SCRIPT_NAME="$(basename "$0")"
-readonly VERSION="2026-07"
+# SCRIPT_VERSION, not VERSION: /etc/os-release defines VERSION, so a plain
+# VERSION collides with anything that sources it.
+readonly SCRIPT_VERSION="2026-07"
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 #                                          OUTPUT THEME (SOURCED, NOT EMBEDDED)
@@ -433,7 +435,7 @@ reload_and_optionally_activate() {
 main() {
     # No `clear`. A tool that blanks the scrollback has destroyed the record of
     # whatever the user ran before it; the banner is the boundary now.
-    banner "NM CONNECTION MAKER" "wi-fi · ethernet · v.${VERSION}"
+    banner "NM CONNECTION MAKER" "wi-fi · ethernet · v.${SCRIPT_VERSION}"
 
     log_phase "PREFLIGHT"
     require_root

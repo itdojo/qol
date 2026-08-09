@@ -308,12 +308,13 @@ if [ -n "$model" ]; then
   log_info "Raspberry Pi detected:$model"
 fi
 
-# Source the os-release file
-if [ -f /etc/os-release ]; then
-  source /etc/os-release
-  log_info "OS version: $PRETTY_NAME ($VERSION_CODENAME)"
+# base_functions.sh already read /etc/os-release into OS_*. Sourcing it here
+# too would put the generic names (VERSION, ID, ...) back in this shell, which
+# is what collides with a script's own constants.
+if [ -n "$OS_ID" ]; then
+  log_info "OS version: $OS_PRETTY_NAME ($OS_CODENAME)"
 else
-  log_err "/etc/os-release not found. Cannot determine distribution. Exiting."
+  log_err "/etc/os-release not found or unreadable. Cannot determine distribution. Exiting."
   exit 1
 fi
 
@@ -322,7 +323,7 @@ fi
 # Ubuntu release; VERSION_CODENAME is the derivative's own name (e.g. "wilma"
 # on Mint 22). Docker only ships packages keyed to upstream codenames, so we
 # prefer UBUNTU_CODENAME when present.
-APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+APT_CODENAME="${OS_UBUNTU_CODENAME:-$OS_CODENAME}"
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Branch on platform
@@ -338,12 +339,12 @@ if [ -n "$model" ]; then
   log_phase "SERVICE"
   enable_and_start_docker
 
-elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
+elif [ "$OS_ID" = "kali" ] || [ "$OS_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
   # Kali is a rolling release based on Debian. Use the appropriate Debian
   # codename for Docker's apt repo.
-  log_info "$PRETTY_NAME detected."
-  log_step "Installing Docker for $PRETTY_NAME..."
+  log_info "$OS_PRETTY_NAME detected."
+  log_step "Installing Docker for $OS_PRETTY_NAME..."
 
   remove_conflicting_packages
   install_packages ca-certificates curl gnupg
@@ -376,12 +377,12 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   log_phase "SERVICE"
   enable_and_start_docker
 
-elif [ "$ID" = "debian" ]; then
+elif [ "$OS_ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
-  log_info "$PRETTY_NAME detected."
+  log_info "$OS_PRETTY_NAME detected."
 
-  if ! is_supported_codename "$VERSION_CODENAME" "${SUPPORTED_DEBIAN_CODENAMES[@]}"; then
-    log_warn "Debian codename '$VERSION_CODENAME' is not in Docker's supported list (${SUPPORTED_DEBIAN_CODENAMES[*]})."
+  if ! is_supported_codename "$OS_CODENAME" "${SUPPORTED_DEBIAN_CODENAMES[@]}"; then
+    log_warn "Debian codename '$OS_CODENAME' is not in Docker's supported list (${SUPPORTED_DEBIAN_CODENAMES[*]})."
     printf "    Falling back to Docker's convenience script (get.docker.com).\n"
     remove_conflicting_packages
     curl -sSL https://get.docker.com | sh
@@ -390,7 +391,7 @@ elif [ "$ID" = "debian" ]; then
     log_phase "SERVICE"
     enable_and_start_docker
   else
-    log_step "Installing Docker for $PRETTY_NAME ($VERSION_CODENAME)..."
+    log_step "Installing Docker for $OS_PRETTY_NAME ($OS_CODENAME)..."
     remove_conflicting_packages
     install_packages ca-certificates curl gnupg apt-transport-https lsb-release software-properties-common
 
@@ -409,7 +410,7 @@ elif [ "$ID" = "debian" ]; then
     log_step "Adding Docker repository to apt sources..."
     echo \
       "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-          $VERSION_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
+          $OS_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
     check_status "Adding Docker repository" $?
 
     update_repo
@@ -427,7 +428,7 @@ else
   # ---- Ubuntu and Ubuntu derivatives --------------------------------------
   # Covers Ubuntu, Pop!_OS, Linux Mint, Ubuntu MATE/Studio/Kylin/Budgie,
   # elementary OS, Zorin, KDE neon, etc.
-  log_step "Installing Docker for $PRETTY_NAME..."
+  log_step "Installing Docker for $OS_PRETTY_NAME..."
   log_info "Not a Raspberry Pi, Kali or Debian installation; treating as Ubuntu / Ubuntu-derivative."
   log_info "Apt suite: $APT_CODENAME"
 

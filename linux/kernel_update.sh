@@ -170,11 +170,13 @@ fi
 
 log_step "Gathering Linux release info..."
 
-if [ -f /etc/os-release ]; then
-  source /etc/os-release
-  log_info "OS version: $PRETTY_NAME ($VERSION_CODENAME)"
+# base_functions.sh already read /etc/os-release into OS_*. Sourcing it here
+# too would put the generic names (VERSION, ID, ...) back in this shell, which
+# is what collides with a script's own constants.
+if [ -n "$OS_ID" ]; then
+  log_info "OS version: $OS_PRETTY_NAME ($OS_CODENAME)"
 else
-  log_err "/etc/os-release not found. Cannot determine distribution."
+  log_err "/etc/os-release not found or unreadable. Cannot determine distribution."
   exit 1
 fi
 
@@ -183,7 +185,7 @@ fi
 # Ubuntu release; VERSION_CODENAME is the derivative's own name (e.g. "wilma"
 # on Mint 22). The mainline PPA only ships packages keyed to upstream Ubuntu
 # codenames, so we prefer UBUNTU_CODENAME when present.
-APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
+APT_CODENAME="${OS_UBUNTU_CODENAME:-$OS_CODENAME}"
 
 # Detect Raspberry Pi
 pi_model=""
@@ -235,9 +237,9 @@ if [ -n "$pi_model" ]; then
     log_ok "Skipping rpi-update (recommended)."
   fi
 
-elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
+elif [ "$OS_ID" = "kali" ] || [ "$OS_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
-  log_info "$PRETTY_NAME detected."
+  log_info "$OS_PRETTY_NAME detected."
   log_info "Kali is a rolling release; updating tracks the latest packaged kernel."
   log_info "That requires apt dist-upgrade + full-upgrade."
 
@@ -249,19 +251,19 @@ elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
     exit 0
   fi
 
-  log_step "Updating $PRETTY_NAME to latest kernel..."
+  log_step "Updating $OS_PRETTY_NAME to latest kernel..."
   apt -y --fix-broken install
   update_repo
   apt -y dist-upgrade
   apt -y full-upgrade
   check_status "Kali full-upgrade" $?
 
-elif [ "$ID" = "debian" ]; then
+elif [ "$OS_ID" = "debian" ]; then
   # ---- Debian (non-Kali) --------------------------------------------------
   # The mainline PPA is Ubuntu-only, so on Debian we update via the apt
   # suites the system is already configured for. For a newer kernel than
   # stable ships, the user can enable backports manually.
-  log_info "$PRETTY_NAME detected. Updating via apt against the configured suites."
+  log_info "$OS_PRETTY_NAME detected. Updating via apt against the configured suites."
   log_info "For newer kernels, enable backports manually: https://backports.debian.org/Instructions/"
 
   log_step "Running apt full-upgrade..."

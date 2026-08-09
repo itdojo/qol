@@ -13,7 +13,9 @@
 #   - fstring: back-compat wrapper around the old output API.
 #   - check_status, as_root, not_as_root, check_if_linux
 #   - apt helpers: update_repo, update_and_upgrade, install_packages
-#   - OS_NAME / OS_VERSION / OS_CODENAME exported from /etc/os-release
+#   - OS_NAME / OS_VERSION / OS_VERSION_ID / OS_CODENAME / OS_UBUNTU_CODENAME /
+#     OS_ID / OS_ID_LIKE / OS_PRETTY_NAME exported from /etc/os-release. Read
+#     these; do not source /etc/os-release yourself.
 #   - A CTRL-C trap (installed at the bottom of this file)
 #
 # NOTE: Several functions call `exit` on error. Because this file is meant to
@@ -474,15 +476,28 @@ install_packages() {
 # Install the CTRL-C trap for any script that sources this library.
 trap handle_ctrl_c INT
 
-# Import the os-release file
+# Import the os-release file.
+#
+# Sourced in a child bash process, not this shell. os-release sets generic
+# names (NAME, VERSION, ID, ...) that a calling script may already own; if the
+# caller declared one readonly, sourcing here aborts with
+# "/etc/os-release: line N: VERSION: readonly variable". A child process starts
+# with no such attributes, so the collision cannot happen, and only the OS_*
+# variables come back. printf %q keeps the values safe through eval.
+#
+# Every sourcing script should read these instead of sourcing /etc/os-release
+# on its own — that is what reintroduces the generic names, and the whole point
+# of the OS_ prefix is that nothing in this repo owns a name os-release also
+# uses. All are always defined; they are empty when /etc/os-release is absent,
+# so a caller can test OS_ID for emptiness rather than stat the file.
+OS_NAME="" OS_VERSION="" OS_VERSION_ID="" OS_CODENAME=""
+OS_UBUNTU_CODENAME="" OS_ID="" OS_ID_LIKE="" OS_PRETTY_NAME=""
 if [ -f /etc/os-release ]; then
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    export OS_NAME="$NAME"
-    export OS_VERSION="$VERSION"
-    export OS_CODENAME="$VERSION_CODENAME"
-    # Avoid leaking the rest of os-release into the calling script's env.
-    unset NAME VERSION VERSION_CODENAME VERSION_ID ID ID_LIKE PRETTY_NAME \
-          ANSI_COLOR LOGO CPE_NAME HOME_URL SUPPORT_URL BUG_REPORT_URL \
-          PRIVACY_POLICY_URL UBUNTU_CODENAME
+    eval "$(bash -c '. /etc/os-release
+        printf "OS_NAME=%q OS_VERSION=%q OS_VERSION_ID=%q OS_CODENAME=%q\n" \
+               "${NAME:-}" "${VERSION:-}" "${VERSION_ID:-}" "${VERSION_CODENAME:-}"
+        printf "OS_UBUNTU_CODENAME=%q OS_ID=%q OS_ID_LIKE=%q OS_PRETTY_NAME=%q\n" \
+               "${UBUNTU_CODENAME:-}" "${ID:-}" "${ID_LIKE:-}" "${PRETTY_NAME:-}"')"
 fi
+export OS_NAME OS_VERSION OS_VERSION_ID OS_CODENAME \
+       OS_UBUNTU_CODENAME OS_ID OS_ID_LIKE OS_PRETTY_NAME

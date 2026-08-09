@@ -55,12 +55,13 @@ if ! command -v apt-get >/dev/null 2>&1; then
 fi
 
 log_step "Gathering Linux release info..."
-if [ -f /etc/os-release ]; then
-    # shellcheck disable=SC1091
-    . /etc/os-release
-    log_info "OS version: ${PRETTY_NAME:-unknown} (${VERSION_CODENAME:-unknown})"
+# base_functions.sh already read /etc/os-release into OS_*. Sourcing it here
+# too would put the generic names (VERSION, ID, ...) back in this shell, which
+# is what collides with a script's own constants.
+if [ -n "$OS_ID" ]; then
+    log_info "OS version: ${OS_PRETTY_NAME:-unknown} (${OS_CODENAME:-unknown})"
 else
-    log_err "/etc/os-release not found. Cannot determine distribution."
+    log_err "/etc/os-release not found or unreadable. Cannot determine distribution."
     exit 1
 fi
 
@@ -68,7 +69,7 @@ fi
 # PPA (Ubuntu family only)
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_phase "REPOSITORY"
-if [ "${ID:-}" = "ubuntu" ] || [[ "${ID_LIKE:-}" == *ubuntu* ]]; then
+if [ "$OS_ID" = "ubuntu" ] || [[ "$OS_ID_LIKE" == *ubuntu* ]]; then
     log_step "Adding the wireshark-dev/stable PPA..."
     if ! command -v add-apt-repository >/dev/null 2>&1; then
         install_packages software-properties-common
@@ -76,7 +77,7 @@ if [ "${ID:-}" = "ubuntu" ] || [[ "${ID_LIKE:-}" == *ubuntu* ]]; then
     add-apt-repository -y ppa:wireshark-dev/stable
     check_status "Adding wireshark-dev/stable PPA" $?
 else
-    log_info "Non-Ubuntu system detected (${ID:-unknown}); installing Wireshark from the distro repos."
+    log_info "Non-Ubuntu system detected (${OS_ID:-unknown}); installing Wireshark from the distro repos."
 fi
 
 update_repo
