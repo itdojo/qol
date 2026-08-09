@@ -2,7 +2,7 @@
 
 The house style for every shell script in this repo. `install_zsh_starship.sh` is the living reference — when this doc and that script disagree, fix one of them, never a third way. `install_nano.sh` is the reference for scripts that take flags. `linux/base_functions.sh` is the sourced library for Linux-only scripts.
 
-Status note (2026-07-27): `install_zsh.sh` was the original reference and is now deprecated — still published because people depend on it; long-term it will be removed or replaced by the starship script under the old name.
+Status note (2026-07-27): `install_zsh.sh` was the original reference and is now deprecated — still published because people depend on it; long-term it will be removed or replaced by the starship script under the old name. The reasons are in [install-zsh-deprecation.md](install-zsh-deprecation.md).
 
 Two goals: every script **reads** the same (section layout) and **runs** the same (what the user sees on STDOUT).
 
