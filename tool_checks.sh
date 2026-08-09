@@ -4,7 +4,7 @@
 # tool_checks.sh
 #
 # Sourceable checks that make sure common CLI tools are installed, using the
-# repo-standard theme from linux/base_functions.sh.
+# IT Dojo terminal theme from linux/base_functions.sh.
 #
 # Usage (from another script):
 #     source /path/to/tool_checks.sh
@@ -13,13 +13,20 @@
 #
 # On macOS, tools are installed with Homebrew. On Debian/Ubuntu-family Linux,
 # they are installed with apt via install_packages (requires root).
+#
+# This file is a library, not a run: no banner, no phases, no completion
+# block. Those belong to the script that sources it.
 
 # Resolve this file's directory even when sourced from another location.
 TOOL_CHECKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" >/dev/null 2>&1 && pwd)"
 
 # shellcheck source=linux/base_functions.sh
 if ! source "${TOOL_CHECKS_DIR}/linux/base_functions.sh" 2>/dev/null; then
-    printf '%s\n' "❌  Could not source linux/base_functions.sh (expected at ${TOOL_CHECKS_DIR}/linux/base_functions.sh)." >&2
+    # log_err is not available yet — this is the failure to load it. Hand-write
+    # the same 9-column prefix log_err emits at QOL_DEPTH=none, so the line
+    # still greps as '^. STOP' alongside every other error in a captured log.
+    printf '%s\n' "▌ STOP   Could not source linux/base_functions.sh (expected at ${TOOL_CHECKS_DIR}/linux/base_functions.sh)." \
+                  "▌ STOP   Get it from https://github.com/itdojo/qol." >&2
     return 1 2>/dev/null || exit 1
 fi
 

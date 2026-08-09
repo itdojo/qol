@@ -41,6 +41,11 @@
 #  - Unified terminal output with the repo-standard theme (log_* helpers from
 #    base_functions.sh); replaced the old fstring calls.
 #
+# Updated: 2026-08-09
+#  - Adopted the IT Dojo terminal design system: banner/log_phase/log_complete
+#    bookends, badge lines instead of emoji, and no `clear` at the top. Clearing
+#    the screen destroys the record of whatever the user ran before this.
+#
 # This script relies on the availability of the base_functions.sh file. If it
 # is not found, it will be downloaded from https://github.com/itdojo/qol.
 
@@ -50,18 +55,28 @@ BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh"  # Path to the base_functions.s
 BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
 
 if [ ! -f "$BASE_FUNCTIONS" ]; then
-  echo "base_functions.sh not found. Downloading from GitHub..."
+  # log_* is not available yet — this is the fetch that makes it available.
+  # Hand-write the same 9-column prefix the helpers emit at QOL_DEPTH=none, so
+  # these lines still grep as '^. STOP' alongside every other error.
+  printf '%s\n' "▌ STEP   base_functions.sh not found. Downloading from GitHub..."
   if command -v curl >/dev/null 2>&1; then
     curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS"
   else
     wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS"
-  fi || { echo "❌  Failed to download base_functions.sh"; exit 1; }
+  fi || {
+    printf '%s\n' "▌ STOP   Failed to download base_functions.sh." \
+                  "▌ STOP   Get it from https://github.com/itdojo/qol." >&2
+    exit 1
+  }
 fi
 
 # Source the base_functions.sh file
 source "$BASE_FUNCTIONS"
-command -v log_step >/dev/null 2>&1 \
-  || { echo "❌  base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
+command -v log_phase >/dev/null 2>&1 || {
+  printf '%s\n' "▌ STOP   base_functions.sh is outdated (no log_phase)." \
+                "▌ STOP   Update it from https://github.com/itdojo/qol." >&2
+  exit 1
+}
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Ubuntu codenames currently supported by the cappelikan/ppa mainline tool
@@ -122,46 +137,44 @@ report_kernel_status() {
     latest=""
   fi
 
-  echo ""
+  # REBOOT_NEEDED is read by the completion block to pick its NEXT lines.
   if [ -z "$latest" ]; then
-    log_warn "Could not determine installed kernel version."
-    printf "%s\n" "Running kernel: $running"
+    log_warn "Could not determine the installed kernel version; running kernel is $running."
   elif [ "$running" = "$latest" ]; then
     log_ok "Kernel is already up to date ($running). No reboot needed."
   else
     log_ok "Kernel update staged for next reboot."
-    printf "    Running:   %s\n" "$running"
-    printf "    Installed: %s\n" "$latest"
-    echo ""
-    style_text "🔁  Reboot to load the new $latest kernel." bold red
+    log_info "Running:   $running"
+    log_info "Installed: $latest"
+    REBOOT_NEEDED="$latest"
   fi
-  echo ""
 }
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Pre-flight
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-clear          # Clear the screen
+# No `clear` here. An installer that blanks the scrollback has destroyed the
+# record of whatever the user ran before it; the banner is the boundary now.
+REBOOT_NEEDED=""
+
+banner "KERNEL UPDATER" "linux · pi · kali · debian · ubuntu"
+
+log_phase "PREFLIGHT"
 as_root        # Confirm running as root
 check_if_linux # Confirm running on Linux
-
-log_title "🐧  KERNEL UPDATER FOR LINUX  -  v.2026-07"
 
 # Ensure needrestart is installed so the user is told what to restart later
 if ! command -v needrestart >/dev/null; then
   install_packages needrestart
 fi
 
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Detect distro
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_step "Gathering Linux release info..."
 
 if [ -f /etc/os-release ]; then
   source /etc/os-release
-  printf "%s\n" "OS Version: $PRETTY_NAME ($VERSION_CODENAME)"
+  log_info "OS version: $PRETTY_NAME ($VERSION_CODENAME)"
 else
-  echo "❌  /etc/os-release not found. Cannot determine distribution. Exiting."
+  log_err "/etc/os-release not found. Cannot determine distribution."
   exit 1
 fi
 
@@ -175,16 +188,17 @@ APT_CODENAME="${UBUNTU_CODENAME:-$VERSION_CODENAME}"
 # Detect Raspberry Pi
 pi_model=""
 if pi_model="$(detect_raspberry_pi)"; then
-  printf "%s\n" "🥧 I am a $(style_text "Raspberry Pi" bold red): ${pi_model}"
+  log_info "Raspberry Pi detected: ${pi_model}"
 fi
 
 # Show currently running kernel
 running_kernel="$(uname -r)"
-printf "%s\n" "🧬  Currently running kernel: $(style_text "$running_kernel" bold green)"
+log_info "Currently running kernel: $running_kernel"
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Branch on platform
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+log_phase "KERNEL"
 if [ -n "$pi_model" ]; then
   # ---- Raspberry Pi -------------------------------------------------------
   # Standard apt path is the safe default. rpi-update is opt-in.
@@ -197,10 +211,15 @@ if [ -n "$pi_model" ]; then
   apt -y full-upgrade
   check_status "Raspberry Pi apt full-upgrade" $?
 
-  echo ""
-  log_warn "rpi-update installs UNRELEASED firmware and kernels."
-  printf "%s\n" "    It can break a working Pi. Most users should answer 'n' here."
-  read -r -p "Run rpi-update for bleeding-edge firmware/kernel? [y/N]: " rpi_confirm
+  log_warn "rpi-update installs UNRELEASED firmware and kernels. It can break a working Pi."
+  log_warn "Most users should answer 'n' here."
+  # Deliberately NOT ask_confirm: that helper returns yes whenever ASSUME_YES is
+  # set, and this script has no --yes flag to document that. A stray ASSUME_YES
+  # in the environment must not be what flashes unreleased firmware to a Pi.
+  # Borrow ask_confirm's shape — ASK badge, jade caret — not its semantics.
+  log_ask "Run rpi-update for bleeding-edge firmware/kernel?"
+  printf '    %s❯%s %s[y/N]%s ' "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
+  read -r rpi_confirm
   if [[ $rpi_confirm =~ ^[Yy]$ ]]; then
     if ! command -v rpi-update >/dev/null; then
       install_packages rpi-update
@@ -213,18 +232,20 @@ if [ -n "$pi_model" ]; then
     SKIP_WARNING=1 rpi-update
     check_status "rpi-update" $?
   else
-    printf "%s\n" "Skipping rpi-update (recommended)."
+    log_ok "Skipping rpi-update (recommended)."
   fi
 
 elif [ "$ID" = "kali" ] || [ "$VERSION_CODENAME" = "kali-rolling" ]; then
   # ---- Kali Linux ---------------------------------------------------------
-  printf "%s\n" "👾  I am $(style_text "$PRETTY_NAME" bold blue)."
-  printf "%s\n" "    $(style_text "Kali" normal blue) is a rolling release; updating tracks the latest packaged kernel."
-  printf "%s\n" "    This requires apt dist-upgrade + full-upgrade."
+  log_info "$PRETTY_NAME detected."
+  log_info "Kali is a rolling release; updating tracks the latest packaged kernel."
+  log_info "That requires apt dist-upgrade + full-upgrade."
 
-  read -r -p "Proceed with the upgrade? [y/N]: " confirm
+  log_ask "Proceed with the upgrade?"
+  printf '    %s❯%s %s[y/N]%s ' "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
+  read -r confirm
   if [[ ! $confirm =~ ^[Yy]$ ]]; then
-    printf "Kernel update cancelled.\n"
+    log_ok "Kernel update cancelled at user request."
     exit 0
   fi
 
@@ -240,10 +261,8 @@ elif [ "$ID" = "debian" ]; then
   # The mainline PPA is Ubuntu-only, so on Debian we update via the apt
   # suites the system is already configured for. For a newer kernel than
   # stable ships, the user can enable backports manually.
-  printf "%s\n" "ℹ️   I am $(style_text "$PRETTY_NAME" bold blue)."
-  printf "%s\n" "    Updating via apt against the configured suites."
-  printf "%s\n" "    For newer kernels, consider enabling backports manually:"
-  printf "%s\n" "        https://backports.debian.org/Instructions/"
+  log_info "$PRETTY_NAME detected. Updating via apt against the configured suites."
+  log_info "For newer kernels, enable backports manually: https://backports.debian.org/Instructions/"
 
   log_step "Running apt full-upgrade..."
   apt -y --fix-broken install
@@ -256,14 +275,12 @@ else
   # Covers Ubuntu, Pop!_OS, Linux Mint, Ubuntu MATE/Studio/Kylin/Budgie,
   # elementary OS, Zorin, KDE neon, etc. We use the mainline utility from
   # cappelikan/ppa to install the latest mainline kernel.
-  printf "%s\n" "ℹ️   This is not a $(style_text "Raspberry Pi" normal red), $(style_text "Kali" normal blue) or $(style_text "Debian" normal blue) installation."
-  printf "%s\n" "    Treating as Ubuntu / Ubuntu-derivative. Apt suite: $(style_text "$APT_CODENAME" bold green)"
+  log_info "Not a Raspberry Pi, Kali or Debian installation; treating as Ubuntu / Ubuntu-derivative."
+  log_info "Apt suite: $APT_CODENAME"
 
   if ! is_supported_codename "$APT_CODENAME" "${SUPPORTED_UBUNTU_CODENAMES[@]}"; then
-    printf "⚠️   Codename '%s' is not in the mainline PPA's supported list (%s).\n" \
-      "$APT_CODENAME" "${SUPPORTED_UBUNTU_CODENAMES[*]}"
-    printf "    This usually means the release is too old (EOL) or too new for the PPA.\n"
-    printf "    Falling back to apt full-upgrade against the configured suites.\n"
+    log_warn "Codename '$APT_CODENAME' is not in the mainline PPA's supported list (${SUPPORTED_UBUNTU_CODENAMES[*]})."
+    log_warn "The release is likely too old (EOL) or too new for the PPA. Falling back to apt full-upgrade."
 
     log_step "Running apt full-upgrade..."
     apt -y --fix-broken install
@@ -294,10 +311,16 @@ fi
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Report whether a kernel update is staged for next reboot
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+log_phase "VERIFY"
 report_kernel_status
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Completion
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-log_title "🏁  KERNEL UPGRADE COMPLETE  🏁"
-echo ""
+log_complete "KERNEL UPGRADE COMPLETE"
+if [ -n "$REBOOT_NEEDED" ]; then
+  log_next "Reboot to load the new $REBOOT_NEEDED kernel:  sudo reboot"
+else
+  log_next "Nothing to do — the running kernel is already the newest installed."
+fi
+echo

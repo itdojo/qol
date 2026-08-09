@@ -20,37 +20,45 @@ BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh"
 BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
 
 if [ ! -f "$BASE_FUNCTIONS" ]; then
-    echo "base_functions.sh not found. Downloading from GitHub..."
+    # log_* is not available yet — this is the fetch that makes it available.
+    # Hand-write the same 9-column prefix the helpers emit at QOL_DEPTH=none,
+    # so these lines still grep as '^. STOP' alongside every other error.
+    printf '%s\n' "▌ STEP   base_functions.sh not found. Downloading from GitHub..."
     if command -v curl >/dev/null 2>&1; then
         curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS"
     else
         wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS"
-    fi || { echo "❌  Failed to download base_functions.sh"; exit 1; }
+    fi || {
+        printf '%s\n' "▌ STOP   Failed to download base_functions.sh." \
+                      "▌ STOP   Get it from https://github.com/itdojo/qol." >&2
+        exit 1
+    }
 fi
 
 # shellcheck source=base_functions.sh
 source "$BASE_FUNCTIONS"
-command -v log_step >/dev/null 2>&1 \
-    || { echo "❌  base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
+command -v log_phase >/dev/null 2>&1 || {
+    printf '%s\n' "▌ STOP   base_functions.sh is outdated (no log_phase)." \
+                  "▌ STOP   Update it from https://github.com/itdojo/qol." >&2
+    exit 1
+}
 
+banner "WIRESHARK INSTALLER" "wireshark · tshark · non-root capture"
+
+log_phase "PREFLIGHT"
 as_root
 check_if_linux
-
-log_title "🦈  WIRESHARK INSTALLER  -  v.2026-07"
 
 if ! command -v apt-get >/dev/null 2>&1; then
     log_err "apt-get not found. This installer supports Debian/Ubuntu-family systems only."
     exit 1
 fi
 
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Detect distro
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_step "Gathering Linux release info..."
 if [ -f /etc/os-release ]; then
     # shellcheck disable=SC1091
     . /etc/os-release
-    printf '%s\n' "OS Version: ${PRETTY_NAME:-unknown} (${VERSION_CODENAME:-unknown})"
+    log_info "OS version: ${PRETTY_NAME:-unknown} (${VERSION_CODENAME:-unknown})"
 else
     log_err "/etc/os-release not found. Cannot determine distribution."
     exit 1
@@ -59,6 +67,7 @@ fi
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # PPA (Ubuntu family only)
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+log_phase "REPOSITORY"
 if [ "${ID:-}" = "ubuntu" ] || [[ "${ID_LIKE:-}" == *ubuntu* ]]; then
     log_step "Adding the wireshark-dev/stable PPA..."
     if ! command -v add-apt-repository >/dev/null 2>&1; then
@@ -75,6 +84,7 @@ update_repo
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Install
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+log_phase "WIRESHARK"
 # Answer the "should non-superusers be able to capture packets?" prompt ahead
 # of time so apt never blocks waiting for input.
 log_step "Preseeding Wireshark capture permissions (non-root capture: yes)..."
@@ -85,15 +95,24 @@ install_packages wireshark tshark
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Let the invoking (non-root) user capture without sudo
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+log_phase "CAPTURE PERMISSIONS"
 capture_user="${SUDO_USER:-}"
+group_added=""
 if [ -n "$capture_user" ] && [ "$capture_user" != "root" ] && id "$capture_user" >/dev/null 2>&1; then
     log_step "Adding $capture_user to the wireshark group..."
     usermod -aG wireshark "$capture_user"
     check_status "Add $capture_user to wireshark group" $?
-    log_info "Log out and back in (or run 'newgrp wireshark') for the group change to take effect."
+    group_added=1
 else
-    log_info "No non-root user detected. To capture without sudo, run:  sudo usermod -aG wireshark <username>"
+    log_info "No non-root user detected; nobody was added to the wireshark group."
 fi
 
-log_title "🏁  WIRESHARK INSTALL COMPLETE"
-echo ""
+log_complete "WIRESHARK INSTALL COMPLETE"
+if [ -n "$group_added" ]; then
+    log_next "Log out and back in for the group change to take effect."
+    log_next "Or apply it to this shell now:  newgrp wireshark"
+else
+    log_next "To capture without sudo:  sudo usermod -aG wireshark <username>"
+fi
+log_next "Start capturing:  wireshark   (or tshark -i <interface> for the CLI)"
+echo
