@@ -1253,7 +1253,7 @@ cd ~/projects/qol && bash -n gotime && echo "PARSE OK"
 
 Expected: `PARSE OK`.
 
-- [x] **Step 8: Run it and compare against the reference**  <!-- verified 2026-08-08 from a screen recording; also surfaced the redraw flicker fixed in c7dc1e6 -->
+- [x] **Step 8: Run it and compare against the reference**  <!-- verified 2026-08-08 from a screen recording; surfaced the redraw flicker (c7dc1e6) and the 80-column ceiling (b1f0499); re-confirmed after both -->
 
 ```bash
 cd ~/projects/qol && ./gotime
@@ -1462,7 +1462,7 @@ cd ~/projects/qol && ./tests/test-theme.sh
 
 Expected: `0 failed`.
 
-- [ ] **Step 5: Verify the arrow keys by hand**
+- [x] **Step 5: Verify the arrow keys by hand**  <!-- verified 2026-08-08 after 13afa3a/b1f0499; bar measured spanning the full terminal, run returned driver=1 root=/var/lib/docker group=yes -->
 
 Automated TTY testing is not worth building here, so drive it once manually:
 
