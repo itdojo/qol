@@ -164,7 +164,7 @@ term_cols() {
 
 hr() {  # a full-width colored rule
     local ch="${1:-━}" cols line
-    cols="$(term_cols)"
+    cols="${COLS:-$(term_cols)}"
     printf -v line '%*s' "$cols" ''
     printf '%s%s%s\n' "$C_RULE" "${line// /$ch}" "$C_RESET"
 }
@@ -177,15 +177,24 @@ banner() {
 }
 
 render_row() {  # render_row <index> <selected-index> <number-width>
-    local i="$1" sel="$2" numw="$3" num name
+    local i="$1" sel="$2" numw="$3" num name plain pad
     num="$(printf "%${numw}d" $(( i + 1 )))"
     name="${NAMES[$i]}"
     if (( i == sel )); then
-        printf '%s%s%s ❯  %s   %s%s%s\n' \
-            "$SEL_BG" "$C_BOLD" "$C_JADE" "$num" "$name" "$CLR_EOL" "$C_RESET"
+        # Paint the bar with real spaces rather than stretching it with
+        # CLR_EOL. ESC[K only carries the current background to the edge on a
+        # terminal advertising `bce`; screen and tmux do not, and gotime can
+        # be started from inside tmux — there the bar would stop at the name.
+        # Both branches lead with four columns, " ❯  " or four spaces, so one
+        # template measures either.
+        printf -v plain '    %s   %s' "$num" "$name"
+        pad=$(( ${COLS:-$(term_cols)} - ${#plain} ))
+        (( pad < 0 )) && pad=0
+        printf '%s%s%s ❯  %s   %s%*s%s\n' \
+            "$SEL_BG" "$C_BOLD" "$C_JADE" "$num" "$name" "$pad" '' "$C_RESET"
     else
-        # CLR_EOL is not cosmetic here: the row this one replaces may have been
-        # the selected row, whose SEL_BG runs to the right edge.
+        # CLR_EOL is right here, and portable: erasing to the *default*
+        # background is exactly what clearing the bar off this row needs.
         printf '    %s%s%s   %s%s%s%s\n' \
             "$C_META" "$num" "$C_RESET" "$C_FG" "$name" "$C_RESET" "$CLR_EOL"
     fi
@@ -215,6 +224,12 @@ footer() {  # footer <selected-index> <number-buffer>
 
 draw() {  # draw <selected-index> <number-buffer>
     local sel="$1" numbuf="$2" i kind prev="" numw="${#COUNT}"
+    # Measure once per frame. term_cols forks stty, and hr wants the width
+    # three times per frame with the selected row wanting it once more —
+    # measured at 5 calls per frame uncached against 1 with this. Re-read
+    # every frame rather than once at startup, so a window resize is picked
+    # up on the next keypress.
+    COLS="$(term_cols)"
     # Home and overwrite in place; do NOT clear first. `tput clear` blanks the
     # screen and the ~40 writes that repaint it are separate, so the terminal
     # renders the empty frame — a visible flicker on every keypress. Each line

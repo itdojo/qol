@@ -72,5 +72,17 @@ assert_eq "$WIDTH" "$({ sleep 1; printf 'q'; sleep 1; } | script -q /dev/null ba
     | tr -d '\r\004\010' | sed 's/\^D//g' | widest)" \
     "gotime's rules span the terminal"
 
+# The bar is painted with real spaces, not stretched with CLR_EOL: screen and
+# tmux report no `bce`, so ESC[K there erases to the default background and
+# cuts the bar off where the text ended. Measuring the row with escapes
+# stripped is exactly the check — a CLR_EOL-stretched bar measures as short as
+# its text, a padded one measures the full width.
+printf '\ngotime paints its selection bar rather than erasing to it\n'
+_bar="$({ sleep 1; printf 'q'; sleep 1; } | script -q /dev/null bash -c \
+    "stty cols $WIDTH -echo -echoctl 2>/dev/null; unset COLUMNS; '$ROOT/gotime'" 2>&1 \
+    | tr -d '\r\004\010' | sed 's/\^D//g' \
+    | perl -CSD -ne 's/\e\[[?0-9;]*[A-Za-z]//g; chomp; if (/\x{276f}/) { print length($_); exit }')"
+assert_eq "$WIDTH" "${_bar:-0}" "the selected row is padded to the full terminal width"
+
 printf '\n%d run, %d failed\n' "$TESTS_RUN" "$TESTS_FAILED"
 [[ "$TESTS_FAILED" -eq 0 ]]
