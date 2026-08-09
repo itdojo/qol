@@ -45,6 +45,10 @@
 #  - Adopted the IT Dojo terminal design system: banner/log_phase/log_complete
 #    bookends, badge lines instead of emoji, and no `clear` at the top. Clearing
 #    the screen destroys the record of whatever the user ran before this.
+#  - Added the ACTIVATE phase. Installing a kernel never makes it the running
+#    kernel; only a reboot does. The script now offers to point the bootloader
+#    at the new kernel and reboot into it, and prints how to switch later when
+#    the offer is declined.
 #
 # This script relies on the availability of the base_functions.sh file. If it
 # is not found, it will be downloaded from https://github.com/itdojo/qol.
@@ -151,11 +155,170 @@ report_kernel_status() {
 }
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: echo the path to grub.cfg, or nothing when this system has no GRUB.
+# Raspberry Pi OS boots straight from the firmware and has no bootloader menu
+# to configure, so "no GRUB" is a normal answer, not an error.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+find_grub_cfg() {
+  local candidate
+  for candidate in /boot/grub/grub.cfg /boot/grub2/grub.cfg; do
+    if [ -r "$candidate" ]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: pull the id out of a grub.cfg `menuentry`/`submenu` line.
+#   menuentry 'Ubuntu, 6.14.0-27' ... $menuentry_id_option 'gnulinux-...' {
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+grub_id_from_line() {
+  printf '%s\n' "$1" | sed -n "s/.*menuentry_id_option '\([^']*\)'.*/\1/p"
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: echo the grub-set-default argument for a kernel version.
+# Every kernel gets an "-advanced-" entry inside the "Advanced options for ..."
+# submenu, and grub-set-default addresses a nested entry as "submenu>entry".
+# The submenu id is remembered until its closing brace at column 0; the inner
+# entries close with an indented brace, so only the submenu itself clears it.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+grub_entry_for_kernel() {
+  local kver="$1" cfg="$2"
+  local submenu="" line id
+
+  while IFS= read -r line; do
+    case "$line" in
+      '}'*)
+        submenu=""
+        ;;
+      *submenu*menuentry_id_option*)
+        submenu="$(grub_id_from_line "$line")"
+        ;;
+      *menuentry*menuentry_id_option*)
+        id="$(grub_id_from_line "$line")"
+        case "$id" in
+          *"$kver"-advanced-*)
+            if [ -n "$submenu" ]; then
+              printf '%s>%s' "$submenu" "$id"
+            else
+              printf '%s' "$id"
+            fi
+            return 0
+            ;;
+        esac
+        ;;
+    esac
+  done < "$cfg"
+
+  return 1
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: make the named kernel the one the bootloader picks by default.
+#
+# GRUB_DEFAULT=0 already boots the newest installed kernel — 10_linux sorts the
+# menu by version — so the common case needs no edit at all. Only a system
+# pinned to some other entry gets /etc/default/grub rewritten, and then only to
+# GRUB_DEFAULT=saved so grub-set-default has something to write to.
+#
+# Returns 0 when the next boot will use $kver, 1 when it will not.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+set_default_kernel() {
+  local kver="$1"
+  local cfg current entry bak tmp rc
+
+  if ! cfg="$(find_grub_cfg)"; then
+    log_info "No GRUB menu on this system; it boots the newest installed kernel on its own."
+    log_info "A reboot is all that is needed to run $kver."
+    return 0
+  fi
+
+  current="0"
+  if [ -r /etc/default/grub ]; then
+    # \042 \047 = the double and single quotes GRUB_DEFAULT's value may be wrapped in.
+    current="$(grep -m1 '^GRUB_DEFAULT=' /etc/default/grub | cut -d= -f2- | tr -d '\042\047')"
+    [ -z "$current" ] && current="0"
+  fi
+
+  if [ "$current" = "0" ]; then
+    log_info "GRUB_DEFAULT=0 already selects the newest installed kernel. Leaving it alone."
+  elif [ "$current" != "saved" ]; then
+    log_step "Repointing GRUB from entry '$current' to the newest kernel..."
+    if ! ls /etc/default/grub.prekernelupdate.*.bak >/dev/null 2>&1; then
+      bak="/etc/default/grub.prekernelupdate.$(date +%Y%m%d-%H%M%S).bak"
+      cp /etc/default/grub "$bak"
+      log_info "Backed up /etc/default/grub to $bak"
+    fi
+    # cat-over, not mv: mv from mktemp would tighten this 0644 file to 0600.
+    tmp="$(mktemp)"
+    sed 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=saved/' /etc/default/grub >"$tmp" \
+      && cat "$tmp" >/etc/default/grub
+    rc=$?
+    rm -f "$tmp"
+    check_status "Setting GRUB_DEFAULT=saved" "$rc" || return 1
+    current="saved"
+  fi
+
+  log_step "Regenerating the GRUB menu..."
+  if command -v update-grub >/dev/null 2>&1; then
+    update-grub
+    rc=$?
+  else
+    grub-mkconfig -o "$cfg"
+    rc=$?
+  fi
+  check_status "GRUB menu regeneration" "$rc" || return 1
+
+  # GRUB_DEFAULT=0 needs no entry id — index 0 is the newest kernel.
+  [ "$current" = "0" ] && return 0
+
+  if ! entry="$(grub_entry_for_kernel "$kver" "$cfg")"; then
+    log_warn "No GRUB entry found for $kver. Leaving the default boot entry alone."
+    log_warn "Pick it by hand at boot: hold Shift (BIOS) or Esc (UEFI), then Advanced options."
+    return 1
+  fi
+
+  if command -v grub-set-default >/dev/null 2>&1; then
+    grub-set-default "$entry"
+    rc=$?
+  elif command -v grub2-set-default >/dev/null 2>&1; then
+    grub2-set-default "$entry"
+    rc=$?
+  else
+    log_warn "grub-set-default not found. Leaving the default boot entry alone."
+    return 1
+  fi
+  check_status "Making $kver the default boot entry" "$rc" || return 1
+
+  log_info "Default boot entry: $entry"
+  return 0
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Helper: reboot, after a countdown long enough to change your mind.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+reboot_now() {
+  local secs="${1:-10}"
+  log_warn "Rebooting in ${secs}s. Press Ctrl-C to cancel and stay on $running_kernel."
+  while [ "$secs" -gt 0 ]; do
+    printf '\r    %s❯%s rebooting in %2ds ' "$QOL_PASS" "$QOL_RESET" "$secs"
+    sleep 1
+    secs=$(( secs - 1 ))
+  done
+  printf '\n'
+  reboot
+}
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Pre-flight
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # No `clear` here. An installer that blanks the scrollback has destroyed the
 # record of whatever the user ran before it; the banner is the boundary now.
 REBOOT_NEEDED=""
+ACTIVATE_KERNEL=""   # set once the bootloader points at the new kernel and a reboot is owed
 
 banner "KERNEL UPDATER" "linux · pi · kali · debian · ubuntu"
 
@@ -317,12 +480,51 @@ log_phase "VERIFY"
 report_kernel_status
 
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Activate — installing a kernel does not run it. Only a reboot does.
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+if [ -n "$REBOOT_NEEDED" ]; then
+  log_phase "ACTIVATE"
+  log_info "$REBOOT_NEEDED is installed but $running_kernel is still running."
+  log_warn "Rebooting closes every open program and drops any SSH session to this host."
+
+  # Deliberately NOT ask_confirm: that helper returns yes whenever ASSUME_YES is
+  # set, and this script has no --yes flag to document that. A stray ASSUME_YES
+  # in the environment must not be what reboots a machine out from under someone.
+  # Borrow ask_confirm's shape — ASK badge, jade caret — not its semantics.
+  log_ask "Boot into $REBOOT_NEEDED now (set it as the default boot entry, then reboot)?"
+  printf '    %s❯%s %s[y/N]%s ' "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
+  read -r activate_confirm
+  if [[ $activate_confirm =~ ^[Yy]$ ]]; then
+    if set_default_kernel "$REBOOT_NEEDED"; then
+      ACTIVATE_KERNEL=1
+    else
+      log_warn "Could not guarantee $REBOOT_NEEDED is the default. Not rebooting."
+    fi
+  else
+    log_ok "Staying on $running_kernel for now."
+  fi
+fi
+
+# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Completion
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 log_complete "KERNEL UPGRADE COMPLETE"
-if [ -n "$REBOOT_NEEDED" ]; then
-  log_next "Reboot to load the new $REBOOT_NEEDED kernel:  sudo reboot"
+if [ -n "$ACTIVATE_KERNEL" ]; then
+  log_next "Rebooting into $REBOOT_NEEDED now."
+  log_next "If it misbehaves, pick the old kernel at boot: hold Shift (BIOS) or Esc (UEFI), then Advanced options."
+elif [ -n "$REBOOT_NEEDED" ]; then
+  log_next "Reboot when you are ready to run $REBOOT_NEEDED:  sudo reboot"
+  if find_grub_cfg >/dev/null; then
+    log_next "To choose it just once, hold Shift (BIOS) or Esc (UEFI) at boot and use Advanced options."
+    log_next "To make it the default, rerun this script and answer y at the ACTIVATE prompt."
+  else
+    log_next "This system boots the newest installed kernel automatically; nothing else to set."
+  fi
 else
   log_next "Nothing to do — the running kernel is already the newest installed."
 fi
 echo
+
+if [ -n "$ACTIVATE_KERNEL" ]; then
+  reboot_now 10
+fi
