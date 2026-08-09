@@ -1679,8 +1679,19 @@ The last two are the ones worth watching: the emoji grep proves the old vocabula
 
 ## Out of scope
 
+> **Completed 2026-08-09, as a separate pass.** Everything below was converted. See `script-design.md` for the resulting embed-vs-source table and `docs/working-notes.md` for what the pass turned up. Summary of the choices made, since they are not obvious from the list:
+>
+> - `linux/nm-connection-maker.sh` was converted to *source* `base_functions.sh` rather than embed it — it is Linux-only, so a copy would have been one more thing to drift. Its hand-rolled menus became `ask_choice`/`ask_value`.
+> - `netstatus.sh` kept its `🛜 ✅ ❌ 🔒 🔌` glyphs, which are its product output, not log badges. It gained the palette only, and its cache was restructured to store state instead of rendered text so the ink is decided by the shell that prints it.
+> - `shell-login-settings.sh` took the badge *words* and no ink, staying dependency-free for login shells.
+> - `linux/kernel_update.sh`'s `rpi-update` prompt deliberately did **not** become `ask_confirm`: that script publishes no `--yes` flag, so honoring `ASSUME_YES` there would let a stray environment variable flash unreleased firmware to a Pi.
+> - `linux/docker_install.sh`, which this plan marked done at Task 5, still had a `🥧`, `style_text ... bold red` calls and naked `printf` milestones in its body — Task 5 only added phases and bookends. Finished in the same pass.
+> - The five embedded copies and `netstatus.sh`'s ink-only copy are now all covered by `tests/test-theme-sync.sh` and by `QOL_FILES` in the vault generator, so `--check` and `--write-qol` reach every one.
+
 These call the retained back-compat helpers and will render in the new palette without edits. Giving them phases and bookends is separate work:
 
 `install_zsh.sh` (deprecated), `netstatus.sh`, `uninstall_omz_p10k.sh`, `shell-login-settings.sh`, `tool_checks.sh`, `linux/docker_uninstall.sh`, `linux/kernel_update.sh`, `linux/nm-connection-maker.sh`, `linux/wireshark_install.sh`.
 
 Rewiring `install_nano.sh`'s existing `confirm()` to call `ask_confirm` is also separate work. Task 8 builds the helper and Task 9 documents it; `install_nano.sh` has an 80k test suite of its own, and changing its prompt path deserves its own review rather than riding along here. `confirm()` keeps working meanwhile — it is unaffected by anything in this plan.
+
+> On that last point: `confirm()` was restyled to the ASK-badge chrome but its *semantics* were left exactly as they were, for the reason the paragraph above anticipates. `ask_confirm`'s own non-TTY rule would short-circuit ahead of the `QOL_NANO_FORCE_TTY` seam that the 296-test suite drives every prompt through. The suite passes unchanged.
