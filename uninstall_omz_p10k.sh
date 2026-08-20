@@ -136,10 +136,26 @@ qol_init_color
 # the only usable fd away. Every rule, bookend and selection bar in this file
 # was pinned to 80 columns by it. stty asks /dev/tty directly, so no amount of
 # nesting can hide the answer. COLUMNS still wins when set, as an override.
+#
+# **Both the redirect order and the `|| true` are load-bearing, and neither is
+# style.** With no controlling terminal — cron, CI, an agent, `ssh host cmd` —
+# opening /dev/tty fails. Bash applies redirections left to right and reports a
+# failed one on its own stderr, so `</dev/tty 2>/dev/null` prints
+# `/dev/tty: Device not configured` past a suppression that is not in effect
+# yet; putting `2>/dev/null` first silences it. That is only the noise. The
+# failure is that the pipeline still exits non-zero, and a script running under
+# `set -E` inherits its ERR trap into this command substitution and dies here —
+# at its opening banner, before doing anything. Measured 2026-08-20:
+# student-setup's `bootstrap.sh` (`set -Eeo pipefail`) reported
+# `Failed at line 239` and stopped; the scripts in this repo use `set -eo` and
+# only printed the message, which is why it read as cosmetic for a week.
+# `|| true` is what makes the fallback to 80 a fallback rather than a fatality.
+# With a real terminal nothing changes: stty answers, the pipeline exits 0, and
+# `|| true` never fires.
 _term_cols() {
     local cols="${COLUMNS:-}"
     if [[ ! "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
-        cols="$(stty size </dev/tty 2>/dev/null | cut -d' ' -f2)"
+        cols="$(stty size 2>/dev/null </dev/tty | cut -d' ' -f2 || true)"
     fi
     if [[ ! "$cols" =~ ^[0-9]+$ ]] || (( cols <= 0 )); then
         cols=80
