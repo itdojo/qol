@@ -1,3 +1,5 @@
+![qol — quality of life tools: shell scripts, helpers, setup, macOS, Linux](docs/qol-readme-hero.png)
+
 # qol (Quality of Life) Tools
 
 A collection of shell scripts and helpers I use to set up and maintain my machines (Linux and macOS). Rather than having scripts scattered across different computers, this repo keeps them in one place so I can use them regularly and improve them over time. The scripts aim to work for most users on most systems, not just for me on mine.
@@ -7,6 +9,27 @@ How the repo is organized:
 - **Repo root** — scripts that run on both macOS and Linux, plus files meant to be sourced from your shell config.
 - **[linux/](linux/)** — Linux-only scripts, plus [`base_functions.sh`](linux/base_functions.sh), the shared helper library most of them use.
 - **[macos/](macos/)** — macOS-only scripts.
+
+## Quick install
+
+The two scripts most people come here for run straight off the network — no clone needed. Read a script before you pipe it into a shell (`curl -fsSL <url> | less`); that goes for this repo and every other one.
+
+**zsh + Starship** — macOS and Linux. Supersedes the deprecated [`install_zsh.sh`](install_zsh.sh); run this one instead.
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/itdojo/qol/main/install_zsh_starship.sh)
+```
+
+Run it as your normal user — it refuses to run as root and calls `sudo` only where it needs to. Process substitution rather than `curl … | bash` keeps your terminal on stdin, so the `sudo` password prompt works. One thing the network form can't do: if Oh My Zsh or Powerlevel10k are installed, the removal step needs [`uninstall_omz_p10k.sh`](uninstall_omz_p10k.sh) sitting next to the script, so clone the repo for that case. Without it the install still completes, with a warning that the old prompt will fight the new one.
+
+**Docker** — Debian/Ubuntu family (Ubuntu, Debian, Kali, Mint, Pop!\_OS, Raspberry Pi OS).
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/itdojo/qol/main/linux/docker_install.sh -o docker_install.sh
+sudo bash docker_install.sh
+```
+
+It downloads [`linux/base_functions.sh`](linux/base_functions.sh) into the same directory on first run, then installs Docker from Docker's official apt repo. Use the two-step form rather than `bash <(curl …)`: the script locates its helper library relative to `$0`, and under process substitution `$0` is a pipe with no directory to write to, so the download fails and the script stops.
 
 ## Tool List
 
