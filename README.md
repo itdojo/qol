@@ -1,4 +1,4 @@
-![qol — quality of life tools: shell scripts, helpers, setup, macOS, Linux](docs/qol-readme-hero.png)
+![qol — Quality of Life](docs/qol-readme-hero.jpg)
 
 # qol (Quality of Life) Tools
 
