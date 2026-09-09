@@ -49,7 +49,7 @@ NETSTATUS_TTL_STALE="${NETSTATUS_TTL_STALE:-300}"
 # Colors come from the IT Dojo terminal design system, but the badge grammar
 # does not: this is a one-line readout printed at shell startup, not a run, so
 # it keeps its glyphs and gains only the palette.
-#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+#   the IT Dojo terminal design system; see script-design.md in this repo.
 #
 # The case block below is the same generated region the two theme copies carry,
 # byte-for-byte, so scripts/build-design-tokens.py --check and --write-qol reach
