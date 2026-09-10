@@ -714,6 +714,26 @@ write_starship_config() {
 
 "$schema" = 'https://starship.rs/config-schema.json'
 
+# How long Starship waits for a command it runs to answer, in milliseconds.
+# Starship's own default is 500, which is generous once a machine is warm —
+# `python3 --version` answers in under 10ms on a Mac that has run it before —
+# and not generous enough the very first time. On a freshly set-up Mac the
+# first execution of a just-installed Homebrew binary pays a cold start the
+# next thousand do not, and Starship prints a red "Executing command ...
+# timed out" warning across the prompt. It is harmless and it self-heals
+# after one run, which is exactly what makes it bad: it appears once, on a
+# new machine, at the moment somebody is least able to tell a warning from a
+# broken install. Reported 2026-09-10 on a fresh Mac, against
+# /opt/homebrew/bin/python3.
+#
+# It is not a Python problem. Six modules in this file run a command to find
+# a version — c, rust, golang, nodejs, java and python — and any of them can
+# be the one that goes first on a new machine.
+#
+# 2000 rather than something larger: a command that has genuinely wedged
+# should still not hold the prompt for longer than somebody will wait.
+command_timeout = 2000
+
 format = """
 [](violet_deep)\
 $os\
