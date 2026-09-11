@@ -232,10 +232,21 @@ alias p=python3
 alias z='cp ~/.zshrc ~/.zshrc.bak && ${EDITOR:-vim} ~/.zshrc'
 alias zshrc="z"
 alias sz="source ~/.zshrc"
-alias cat="bat --style=plain"
-alias bat="bat --style=full"
+# Ubuntu renames both of these so they do not clash with existing Debian
+# packages: bat ships as `batcat`, fd-find as `fdfind`. Resolve the real binary
+# before aliasing, so this works on Ubuntu and on macOS/Homebrew alike --
+# `alias bat="bat --style=full"` pointed at nothing on Ubuntu and took `cat`
+# down with it. `_have` is unfunction'd above, hence `command -v`.
+if command -v batcat >/dev/null 2>&1; then
+  alias cat="batcat --style=plain"
+  alias bat="batcat --style=full"
+elif command -v bat >/dev/null 2>&1; then
+  alias cat="bat --style=plain"
+  alias bat="bat --style=full"
+fi
+command -v fdfind >/dev/null 2>&1 && ! command -v fd >/dev/null 2>&1 && alias fd=fdfind
 alias tmuxconfig='${EDITOR:-vim} $XDG_CONFIG_HOME/tmux/tmux.conf'
-alias ghosttyconfig='${EDITOR:-vim} $XDG_CONFIG_HOME/ghostty/config.ghostty'
+alias ghosttyconfig='${EDITOR:-vim} $XDG_CONFIG_HOME/ghostty/config'
 alias vimconfig='${EDITOR:-vim} $HOME/.vimrc'
 alias claude="claude --chrome"   # https://code.claude.com/docs/en/chrome
 alias dcl="docker container ls"
