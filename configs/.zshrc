@@ -277,13 +277,23 @@ alias tns="tmux new -s"              # New tmux session named <session_name>
 # ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
 #                                                                                     🫆 HINTS MENU
 # ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
-# fzf trainer hints
-echo " ⌃R - 🗿 command history        (ctrl+r)"
-echo " ⌃T - 📌 paste to CLI           (ctrl+t)"
-echo " ⌥C - 📂 cd to folder           (alt+c)"
-echo " cmd **<tab> - 📌 paste to CLI"
-# end fzf trainer hints
-echo "'hint' ► shortcut reminders"
+# fzf trainer hints.
+#
+# Guarded on stdout being a terminal, NOT merely on the shell being
+# interactive. zsh sources this file only for interactive shells, so `-o
+# interactive` is always true here and guards nothing -- but `zsh -ilc "cmd"`
+# is an interactive shell whose stdout is a pipe, and that is the shape every
+# scripted probe uses. Unguarded, these six lines land inside the caller's
+# $( ) ahead of the real answer: `$(zsh -ilc "command -v claude")` returned
+# the whole banner, which is how this was found.
+if [[ -t 1 ]]; then
+  echo " ⌃R - 🗿 command history        (ctrl+r)"
+  echo " ⌃T - 📌 paste to CLI           (ctrl+t)"
+  echo " ⌥C - 📂 cd to folder           (alt+c)"
+  echo " cmd **<tab> - 📌 paste to CLI"
+  # end fzf trainer hints
+  echo "'hint' ► shortcut reminders"
+fi
 function hint() {
     command cat << 'EOF'
 ⎼⎼ 📍 SHORTCUTS ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
