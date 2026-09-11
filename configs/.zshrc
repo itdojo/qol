@@ -229,6 +229,10 @@ alias ls="lsz"
 alias less="bat"
 alias python=python3
 alias p=python3
+# DELIBERATE: this shadows zoxide's `z`, which the init above defines as a
+# function -- an alias declared later wins at command position. The zshrc
+# editor keeps the letter; zoxide is still reachable through `zi`, its
+# interactive picker. Do not "fix" this by renaming the alias.
 alias z='cp ~/.zshrc ~/.zshrc.bak && ${EDITOR:-vim} ~/.zshrc'
 alias zshrc="z"
 alias sz="source ~/.zshrc"
