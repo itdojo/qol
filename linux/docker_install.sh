@@ -1,528 +1,194 @@
-#!/bin/bash
-
-# This script installs Docker on a Linux system. It also adds the current user to the docker group.
-# It has been successfully tested on Ubuntu, Pop!_OS, Kali, Ubuntu MATE, and Raspberry Pi OS.
+#!/usr/bin/env bash
 #
-# Updated: May 2026
-# - Added Ubuntu 26.04 LTS (Resolute) to Docker's supported codename list and
-#   dropped plucky (25.04, EOL since January 2026).
-# - Added support for Ubuntu 25.10 (Questing Quokka) and 25.04 (Plucky Puffin)
-# - Added explicit codename validation against Docker's supported Ubuntu releases
-#   (jammy 22.04, noble 24.04, questing 25.10, resolute 26.04)
-# - Added native Debian 12 (bookworm) / 13 (trixie) support (previously only Kali)
-# - Fixed Linux Mint compatibility by using ${UBUNTU_CODENAME:-$VERSION_CODENAME}
-#   (Mint sets UBUNTU_CODENAME=noble/jammy even when VERSION_CODENAME is wilma/etc.)
-# - Removes conflicting distro packages (docker.io, podman-docker, etc.) before install
-# - Switched GPG key to /etc/apt/keyrings/docker.asc per current Docker docs
-# - Hardened: pipefail on key download, SUDO_USER guard, fall-through fix in
-#   the "already installed" branch (return 0 only worked when sourced)
-# - Added post-install check (docker run hello-world)
-#
-# Updated: July 2026
-# - Unified terminal output with the repo-standard theme (log_* helpers from
-#   base_functions.sh); replaced the old fstring calls.
-# - Root check now happens before any prompts; 'q' at the uninstall prompt
-#   aborts the installer instead of falling through.
-# - Verify the daemon actually STARTS. `systemctl enable --now` (and
-#   get.docker.com) can return 0 while dockerd dies immediately afterward, so
-#   every install path now calls enable_and_start_docker(), which trusts
-#   `systemctl is-active` (not $?), and on failure dumps the daemon log and
-#   exits non-zero instead of reporting SUCCESS over a dead daemon.
-# - Load and persist the netfilter kernel modules Docker's bridge network
-#   needs (ensure_docker_kernel_modules): modprobe the required set, write
-#   /etc/modules-load.d/docker.conf so they survive reboot, and on a stock
-#   kernel install linux-modules-extra-$(uname -r) when any are missing.
-#   Fixes dockerd dying on "MASQUERADE/addrtype ... missing kernel module?".
-# - Auto-select the nftables firewall backend on kernels that lack the legacy
-#   xt_MASQUERADE target but ship native nft masquerade (e.g. Gateworks Venice
-#   and some VPS images). ensure_docker_firewall_backend() writes
-#   "firewall-backend": "nftables" to /etc/docker/daemon.json (Docker >= 29)
-#   instead of letting the daemon fail. No-op when xt_MASQUERADE is available.
-#
-# This script relies on the availability of the base_functions.sh file. If it is not found, the script will exit.
-# The base_functions.sh file should be available in the same directory as this script.
-# If not, you can get it from https://github.com/itdojo/qol.
+# docker_install.sh
+# Install Docker Engine, Buildx, and Compose from Docker's official apt repo.
+# Targets: supported Ubuntu and Debian releases and compatible derivatives.
+# Usage: sudo bash docker_install.sh
+# Rerunning upgrades packages without deleting Docker data.
 
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"       # Get the directory of the script
-BASE_FUNCTIONS="${SCRIPT_DIR}/base_functions.sh" # Path to the base_functions.sh file
-
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_FUNCTIONS="$SCRIPT_DIR/base_functions.sh"
 BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
+DOCKER_PACKAGES=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin)
+CONFLICTING_PACKAGES=(docker.io docker-doc docker-compose docker-compose-v2 docker-buildx podman-docker containerd runc)
+REPO_FAMILY="" REPO_SUITE="" REPO_ARCH=""
 
-if [ ! -f "$BASE_FUNCTIONS" ]; then
-  echo "base_functions.sh not found. Downloading from GitHub..."
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS"
-  else
-    wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS"
-  fi || { echo "▌ STOP   Failed to download base_functions.sh"; exit 1; }
-fi
-
-# Source the base_functions.sh file
-source "$BASE_FUNCTIONS"
-command -v log_step >/dev/null 2>&1 \
-  || { echo "▌ STOP   base_functions.sh is outdated. Update it from https://github.com/itdojo/qol."; exit 1; }
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Docker's officially supported Ubuntu codenames (as of May 2026).
-# Update this list when Docker adds/drops a release.
-# https://docs.docker.com/engine/install/ubuntu/
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-SUPPORTED_UBUNTU_CODENAMES=("jammy" "noble" "questing" "resolute")
-
-# Debian releases supported by Docker's repo (download.docker.com/linux/debian).
-SUPPORTED_DEBIAN_CODENAMES=("bookworm" "trixie")
-
-# Codename to use for Kali (rolling, tracks Debian testing/stable).
-KALI_DEBIAN_CODENAME="trixie"
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: is this codename in the given list?
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-is_supported_codename() {
-  local needle="$1"
-  shift
-  local hay
-  for hay in "$@"; do
-    [ "$hay" = "$needle" ] && return 0
-  done
-  return 1
-}
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: remove distro-provided Docker packages that conflict with docker-ce.
-# Docker's docs explicitly recommend this on Ubuntu 24.04+ and Debian 12+.
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-remove_conflicting_packages() {
-  log_step "Removing conflicting distro Docker packages..."
-  local pkgs=(docker.io docker-doc docker-compose docker-compose-v2 podman-docker containerd runc)
-  # apt-get remove only removes what's installed; missing packages don't error.
-  apt-get remove -y "${pkgs[@]}" 2>/dev/null || true
-  echo "Conflicting package cleanup done."
-}
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: post-install check.
-# Returns 0 on success, non-zero on failure (but does NOT exit the script).
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-docker_smoke_test() {
-  log_step "Running Docker smoke test (hello-world)..."
-  if docker run --rm hello-world >/dev/null 2>&1; then
-    log_ok "Smoke test passed - Docker is working."
-    return 0
-  else
-    log_warn "Smoke test failed. Docker installed but couldn't run hello-world."
-    printf "    Check 'systemctl status docker' and 'journalctl -u docker'.\n"
-    return 1
-  fi
-}
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: make sure the kernel modules Docker's default bridge network needs
-# are loaded, and persist them across reboots.
-#
-# On stock desktop/server kernels these autoload on demand, but on minimal or
-# vendor kernels (VPS, appliance/gateway images) the netfilter NAT extensions
-# are not present, and dockerd then dies creating docker0 with errors like
-# "MASQUERADE ... missing kernel module?" / "Couldn't load match `addrtype'".
-#
-# Strategy: try to load each module; anything that is already loaded or built
-# into the kernel is fine. Whatever genuinely cannot be loaded is collected and,
-# if we're on a stock kernel, we try the linux-modules-extra package that ships
-# them. This never exits on its own — the authoritative pass/fail is the
-# is-active check in enable_and_start_docker().
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-DOCKER_KERNEL_MODULES=(overlay br_netfilter nf_conntrack nf_nat nf_tables
-                       nft_compat nft_chain_nat xt_conntrack xt_addrtype
-                       xt_MASQUERADE xt_nat iptable_nat iptable_filter ip_tables)
-
-ensure_docker_kernel_modules() {
-  # Only meaningful where modprobe exists (skip gracefully otherwise).
-  command -v modprobe >/dev/null 2>&1 || return 0
-
-  log_step "Ensuring Docker's kernel modules are available..."
-  local m missing=()
-  for m in "${DOCKER_KERNEL_MODULES[@]}"; do
-    # Already loaded, loadable, or built-in ("(builtin)" via modinfo) → fine.
-    lsmod 2>/dev/null | grep -qw "$m" && continue
-    modprobe "$m" 2>/dev/null && continue
-    modinfo "$m" >/dev/null 2>&1 && continue
-    missing+=("$m")
-  done
-
-  # Persist across reboots so a future boot doesn't regress to a dead daemon.
-  printf '# Loaded by docker_install.sh for Docker bridge networking.\n%s\n' \
-    "$(printf '%s\n' "${DOCKER_KERNEL_MODULES[@]}")" \
-    > /etc/modules-load.d/docker.conf 2>/dev/null || true
-
-  [ ${#missing[@]} -eq 0 ] && { echo "All required modules present."; return 0; }
-
-  log_warn "Kernel modules missing for the running kernel ($(uname -r)): ${missing[*]}"
-  printf "    Docker's default (iptables) bridge network needs these.\n"
-  # On a stock kernel the extra package supplies them; on a custom/appliance
-  # kernel (VPS, Gateworks, etc.) it won't exist. Non-fatal either way — if
-  # xt_MASQUERADE is the gap, ensure_docker_firewall_backend() may still get
-  # Docker running via the native nftables backend.
-  if install_packages "linux-modules-extra-$(uname -r)"; then
-    for m in "${missing[@]}"; do modprobe "$m" 2>/dev/null || true; done
-  else
-    log_info "No linux-modules-extra-$(uname -r) package (custom/minimal kernel)."
-    printf "    Will try the nftables firewall backend next if applicable.\n"
-  fi
-}
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: merge "firewall-backend": "nftables" into /etc/docker/daemon.json
-# without clobbering an existing config. Returns:
-#   0 = key is set (written now or already present)
-#   2 = a daemon.json exists that we couldn't safely merge (no jq)
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-enable_nftables_backend() {
-  local f=/etc/docker/daemon.json
-  mkdir -p /etc/docker
-  if [ ! -s "$f" ]; then
-    printf '{\n  "firewall-backend": "nftables"\n}\n' > "$f"
-    return 0
-  fi
-  grep -q '"firewall-backend"' "$f" && return 0   # respect an existing setting
-  if command -v jq >/dev/null 2>&1; then
-    local merged
-    merged="$(jq '. + {"firewall-backend":"nftables"}' "$f" 2>/dev/null)" \
-      && printf '%s\n' "$merged" > "$f" && return 0
-  fi
-  return 2
-}
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: pick Docker's firewall backend. Docker's default path uses the legacy
-# iptables MASQUERADE target (xt_MASQUERADE). Some vendor/embedded kernels
-# (e.g. Gateworks Venice, some VPS images) omit CONFIG_NETFILTER_XT_TARGET_
-# MASQUERADE while still shipping native nftables NAT (CONFIG_NF_NAT_MASQUERADE,
-# nft_masq). Docker >= 29 can use those directly via "firewall-backend":
-# "nftables", so on such a kernel we switch backends instead of dying.
-# Only acts when xt_MASQUERADE is genuinely unavailable; otherwise no-op.
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-ensure_docker_firewall_backend() {
-  command -v docker >/dev/null 2>&1 || return 0
-  command -v modprobe >/dev/null 2>&1 || return 0
-
-  # xt_MASQUERADE present (as module or built-in)? Then the default backend is
-  # fine — don't touch daemon.json.
-  modprobe xt_MASQUERADE 2>/dev/null && return 0
-
-  local dver
-  dver=$(docker --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
-  if [ "${dver:-0}" -ge 29 ] && modprobe nft_masq 2>/dev/null; then
-    log_step "xt_MASQUERADE absent; switching Docker to the nftables backend..."
-    if enable_nftables_backend; then
-      log_ok "Set \"firewall-backend\": \"nftables\" in /etc/docker/daemon.json."
-      printf "    This kernel lacks xt_MASQUERADE but has native nft masquerade,\n"
-      printf "    so Docker runs its bridge NAT via the 'ip docker-bridges' table.\n"
+if [[ ! -f "$BASE_FUNCTIONS" ]]; then
+    printf '%s\n' "▌ STEP   Downloading base_functions.sh..."
+    if command -v curl >/dev/null 2>&1; then
+        curl -fsSL "$BASE_FUNCTIONS_URL" -o "$BASE_FUNCTIONS" || {
+            printf '%s\n' "▌ STOP   Could not download base_functions.sh. Get it from https://github.com/itdojo/qol." >&2
+            exit 1
+        }
+    elif command -v wget >/dev/null 2>&1; then
+        wget -q "$BASE_FUNCTIONS_URL" -O "$BASE_FUNCTIONS" || {
+            printf '%s\n' "▌ STOP   Could not download base_functions.sh. Get it from https://github.com/itdojo/qol." >&2
+            exit 1
+        }
     else
-      log_warn "Docker needs the nftables backend here, but /etc/docker/daemon.json"
-      printf "    already exists and jq isn't installed to merge it safely.\n"
-      printf "    Add this key manually, then restart docker:\n"
-      printf '        "firewall-backend": "nftables"\n'
+        printf '%s\n' "▌ STOP   Install curl or wget, then rerun this script." >&2
+        exit 1
     fi
-  else
-    log_warn "xt_MASQUERADE is missing and the nftables backend isn't available"
-    printf "    (needs Docker >= 29 and kernel nft masq support). Docker's bridge\n"
-    printf "    network can't start until the kernel provides one of them.\n"
-  fi
+fi
+# shellcheck source=linux/base_functions.sh
+source "$BASE_FUNCTIONS"
+command -v log_phase >/dev/null 2>&1 || {
+    printf '%s\n' "▌ STOP   base_functions.sh is outdated. Update it from https://github.com/itdojo/qol." >&2
+    exit 1
+}
+install_error() {
+    local rc=$?
+    log_err "Docker installation failed at line ${BASH_LINENO[0]} (exit $rc). Fix the command error above and rerun."
+    exit "$rc"
+}
+trap install_error ERR
+set -E
+
+fail() { log_err "$1"; exit 1; }
+package_installed() {
+    [[ "$(dpkg-query -W -f='${Status}' "$1" 2>/dev/null || true)" == 'install ok installed' ]]
 }
 
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Helper: enable + start docker.service, then VERIFY the daemon is actually
-# running. `systemctl enable --now` (and get.docker.com) can return 0 while the
-# daemon dies immediately afterward, so we trust `is-active`, not $?. A dead
-# daemon is a failed install — this exits the script and dumps the daemon log
-# so the real cause (usually a kernel/netfilter or storage-driver issue, not a
-# packaging problem) is visible instead of buried under a green SUCCESS.
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-enable_and_start_docker() {
-  ensure_docker_kernel_modules
-  ensure_docker_firewall_backend
-  log_step "Enabling and starting the Docker service..."
-  # Clear any restart-limit backoff from a previous failed attempt so this
-  # start is actually tried rather than refused ("start request repeated...").
-  systemctl reset-failed docker.service docker.socket >/dev/null 2>&1
-  systemctl enable docker --now 2>/dev/null
-  if systemctl is-active --quiet docker; then
-    log_info "Docker service status: active"
-    return 0
-  fi
-
-  log_err "Docker service status: failed"
-  log_err "Docker installed but the daemon failed to start."
-  printf "    This is almost always an environment/kernel issue (netfilter/iptables\n"
-  printf "    modules, storage driver) rather than a packaging problem —\n"
-  printf "    reinstalling Docker will NOT fix it. Last lines of the daemon log:\n\n"
-  # Clear the restart-limit backoff so the log shows the real error, not a
-  # "start request repeated too quickly" message.
-  systemctl reset-failed docker.service >/dev/null 2>&1
-  journalctl -u docker.service --no-pager -n 25 2>/dev/null \
-    || printf "    (journalctl unavailable; run: systemctl status docker.service)\n"
-  exit 1
+select_repository() {
+    REPO_ARCH="$(dpkg --print-architecture)"
+    case "$OS_ID" in
+        ubuntu)
+            REPO_FAMILY=ubuntu
+            REPO_SUITE="${OS_UBUNTU_CODENAME:-$OS_CODENAME}"
+            ;;
+        debian|kali|raspbian)
+            REPO_FAMILY=debian
+            REPO_SUITE="$OS_CODENAME"
+            if [[ "$OS_ID" == kali ]]; then REPO_SUITE=trixie; fi
+            ;;
+        *)
+            if [[ "${OS_ID_LIKE:-}" == *ubuntu* || -n "$OS_UBUNTU_CODENAME" ]]; then
+                REPO_FAMILY=ubuntu
+                REPO_SUITE="${OS_UBUNTU_CODENAME:-$OS_CODENAME}"
+            elif [[ "${OS_ID_LIKE:-}" == *debian* ]]; then
+                REPO_FAMILY=debian
+                REPO_SUITE="$OS_CODENAME"
+            else
+                fail "Unsupported distribution: $OS_PRETTY_NAME. Use Docker's installation guide."
+            fi
+            ;;
+    esac
+    case "$REPO_FAMILY:$REPO_SUITE" in
+        ubuntu:jammy|ubuntu:noble|ubuntu:resolute|ubuntu:stonking|debian:bookworm|debian:trixie) ;;
+        *) fail "No supported Docker apt suite for $OS_PRETTY_NAME ($REPO_SUITE). Check Docker's install guide before changing packages." ;;
+    esac
+    case "$REPO_FAMILY:$REPO_ARCH" in
+        ubuntu:amd64|ubuntu:armhf|ubuntu:arm64|ubuntu:ppc64el|ubuntu:s390x|debian:amd64|debian:armhf|debian:arm64|debian:ppc64el) ;;
+        *) fail "Docker does not publish $REPO_FAMILY packages for $REPO_ARCH. Check Docker's supported architectures." ;;
+    esac
+    if [[ "$OS_ID" == raspbian && "$REPO_ARCH" == armhf ]]; then
+        # Debian armhf packages target ARMv7, not Pi 1/Zero ARMv6.
+        case "$(uname -m)" in
+            armv7l|armv8l) ;;
+            *) fail "Debian armhf Docker packages need ARMv7 or newer. This Pi appears to be ARMv6." ;;
+        esac
+    fi
+    log_info "Using Docker's $REPO_FAMILY repository: $REPO_SUITE ($REPO_ARCH)."
 }
 
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Pre-flight
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-clear          # Clear the screen
-as_root        # Confirm running as root (before any prompts or apt work)
-check_if_linux # Confirm running on Linux
-
-banner "DOCKER INSTALLER" "engine · compose · buildx — v.2026-07"
-log_phase "PREFLIGHT"
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Already-installed check
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-if command -v docker >/dev/null; then
-  log_info "Docker is already installed ($(docker --version))."
-  read -r -p "Do you want to continue with the installation? [y/N]: " confirm
-  if [[ ! $confirm =~ ^[Yy]$ ]]; then
-    echo "Exiting..."
-    exit 0
-  fi
-  read -r -p "Do you want to uninstall the existing Docker install first? [y/N]: " confirm
-  if [[ $confirm =~ ^[Yy]$ ]]; then
-    # shellcheck source=docker_uninstall.sh
-    source "${SCRIPT_DIR}/docker_uninstall.sh"
-    uninstall_docker || exit $? # 'q' (or a failed uninstall) aborts the install
-  else
-    echo "Continuing with Docker installation (will install on top of existing)..."
-  fi
-fi
-
-command -v curl >/dev/null || install_packages curl
-command -v needrestart >/dev/null || install_packages needrestart
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Detect distro
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-log_step "Gathering Linux release info..."
-
-# Determine if this is a Raspberry Pi
-model=$(grep Raspberry /proc/cpuinfo | cut -d: -f2)
-if [ -n "$model" ]; then
-  log_info "Raspberry Pi detected:$model"
-fi
-
-# base_functions.sh already read /etc/os-release into OS_*. Sourcing it here
-# too would put the generic names (VERSION, ID, ...) back in this shell, which
-# is what collides with a script's own constants.
-if [ -n "$OS_ID" ]; then
-  log_info "OS version: $OS_PRETTY_NAME ($OS_CODENAME)"
-else
-  log_err "/etc/os-release not found or unreadable. Cannot determine distribution. Exiting."
-  exit 1
-fi
-
-# Pick the right "apt suite" codename. For Ubuntu derivatives (Mint, Pop!_OS,
-# elementary, Zorin, KDE neon, Ubuntu MATE), UBUNTU_CODENAME is the upstream
-# Ubuntu release; VERSION_CODENAME is the derivative's own name (e.g. "wilma"
-# on Mint 22). Docker only ships packages keyed to upstream codenames, so we
-# prefer UBUNTU_CODENAME when present.
-APT_CODENAME="${OS_UBUNTU_CODENAME:-$OS_CODENAME}"
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Branch on platform
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-if [ -n "$model" ]; then
-  # ---- Raspberry Pi -------------------------------------------------------
-  log_step "Installing Docker for$model..."
-
-  remove_conflicting_packages
-  curl -sSL https://get.docker.com | sh
-  check_status "Raspberry Pi Docker installation" $?
-
-  log_phase "SERVICE"
-  enable_and_start_docker
-
-elif [ "$OS_ID" = "kali" ] || [ "$OS_CODENAME" = "kali-rolling" ]; then
-  # ---- Kali Linux ---------------------------------------------------------
-  # Kali is a rolling release based on Debian. Use the appropriate Debian
-  # codename for Docker's apt repo.
-  log_info "$OS_PRETTY_NAME detected."
-  log_step "Installing Docker for $OS_PRETTY_NAME..."
-
-  remove_conflicting_packages
-  install_packages ca-certificates curl gnupg
-
-  log_phase "REPOSITORY"
-  log_step "Adding Docker's GPG key..."
-  install -m 0755 -d /etc/apt/keyrings
-  rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
-  set -o pipefail
-  curl -fsSL https://download.docker.com/linux/debian/gpg \
-    -o /etc/apt/keyrings/docker.asc
-  rc=$?
-  set +o pipefail
-  chmod a+r /etc/apt/keyrings/docker.asc
-  check_status "Adding Docker's GPG key" $rc
-
-  log_step "Adding Docker repository to apt sources (Debian ${KALI_DEBIAN_CODENAME})..."
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-        ${KALI_DEBIAN_CODENAME} stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
-  check_status "Adding Docker repository" $?
-
-  update_repo
-
-  log_phase "DOCKER ENGINE"
-  log_step "Installing Docker..."
-  install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-  check_status "Docker installation" $?
-
-  log_phase "SERVICE"
-  enable_and_start_docker
-
-elif [ "$OS_ID" = "debian" ]; then
-  # ---- Debian (non-Kali) --------------------------------------------------
-  log_info "$OS_PRETTY_NAME detected."
-
-  if ! is_supported_codename "$OS_CODENAME" "${SUPPORTED_DEBIAN_CODENAMES[@]}"; then
-    log_warn "Debian codename '$OS_CODENAME' is not in Docker's supported list (${SUPPORTED_DEBIAN_CODENAMES[*]})."
-    printf "    Falling back to Docker's convenience script (get.docker.com).\n"
-    remove_conflicting_packages
-    curl -sSL https://get.docker.com | sh
-    check_status "Docker convenience-script installation" $?
-
-    log_phase "SERVICE"
-    enable_and_start_docker
-  else
-    log_step "Installing Docker for $OS_PRETTY_NAME ($OS_CODENAME)..."
-    remove_conflicting_packages
-    install_packages ca-certificates curl gnupg apt-transport-https lsb-release software-properties-common
-
-    log_phase "REPOSITORY"
-    log_step "Adding Docker's GPG key..."
-    install -m 0755 -d /etc/apt/keyrings
-    rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
-    set -o pipefail
-    curl -fsSL https://download.docker.com/linux/debian/gpg \
-      -o /etc/apt/keyrings/docker.asc
-    rc=$?
-    set +o pipefail
-    chmod a+r /etc/apt/keyrings/docker.asc
-    check_status "Adding Docker's GPG key" $rc
-
-    log_step "Adding Docker repository to apt sources..."
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
-          $OS_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
-    check_status "Adding Docker repository" $?
-
-    update_repo
-
-    log_phase "DOCKER ENGINE"
-    log_step "Installing Docker..."
-    install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    check_status "Docker installation" $?
-
-    log_phase "SERVICE"
-    enable_and_start_docker
-  fi
-
-else
-  # ---- Ubuntu and Ubuntu derivatives --------------------------------------
-  # Covers Ubuntu, Pop!_OS, Linux Mint, Ubuntu MATE/Studio/Kylin/Budgie,
-  # elementary OS, Zorin, KDE neon, etc.
-  log_step "Installing Docker for $OS_PRETTY_NAME..."
-  log_info "Not a Raspberry Pi, Kali or Debian installation; treating as Ubuntu / Ubuntu-derivative."
-  log_info "Apt suite: $APT_CODENAME"
-
-  # Validate the codename. If we can't, fall back to get.docker.com which
-  # has its own per-distro logic. This avoids a confusing 404 on the apt
-  # repo for unsupported releases (e.g. EOL focal, oracular, lunar).
-  if ! is_supported_codename "$APT_CODENAME" "${SUPPORTED_UBUNTU_CODENAMES[@]}"; then
-    log_warn "Ubuntu codename '$APT_CODENAME' is not in Docker's currently supported list (${SUPPORTED_UBUNTU_CODENAMES[*]})."
-    printf "    This usually means the release is too old (EOL) or too new for Docker's apt repo.\n"
-    printf "    Falling back to Docker's convenience script (get.docker.com).\n"
-    remove_conflicting_packages
-    curl -sSL https://get.docker.com | sh
-    check_status "Docker convenience-script installation" $?
-
-    log_phase "SERVICE"
-    enable_and_start_docker
-  else
-    install_packages ca-certificates gnupg apt-transport-https lsb-release software-properties-common
-    check_status "Checking result of package installation" $?
-
-    remove_conflicting_packages
-
-    log_phase "REPOSITORY"
-    # Add Docker's official GPG key
-    log_step "Adding Docker's GPG key..."
-    install -m 0755 -d /etc/apt/keyrings
-    rm -f /etc/apt/keyrings/docker.gpg /etc/apt/keyrings/docker.asc
-    set -o pipefail
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-      -o /etc/apt/keyrings/docker.asc
-    rc=$?
-    set +o pipefail
-    chmod a+r /etc/apt/keyrings/docker.asc
-    check_status "Checking Result for Adding Docker's GPG key" $rc
-
-    # Add the repository to apt sources. We use APT_CODENAME so that
-    # Mint/Pop!_OS/etc. resolve to their upstream Ubuntu codename.
-    log_step "Adding Docker repository to apt sources..."
-    echo \
-      "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu \
-          $APT_CODENAME stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
-    check_status "Checking Result for Adding Docker repository to apt sources" $?
-
-    update_repo
-
-    log_phase "DOCKER ENGINE"
-    log_step "Installing Docker..."
-    install_packages docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-    check_status "Checking Result of Docker installation" $?
-
-    log_phase "SERVICE"
-    enable_and_start_docker
-  fi
-fi
-
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Add user(s) to docker group
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Build a deduplicated list of candidate users to add. Skip empty values
-# (happens when running as a true root login where SUDO_USER isn't set) and
-# skip "root" (root doesn't need to be in the docker group).
-declare -A _seen_users=()
-candidate_users=()
-for u in "$USER" "$SUDO_USER"; do
-  if [ -n "$u" ] && [ "$u" != "root" ] && [ -z "${_seen_users[$u]+x}" ]; then
-    if id "$u" >/dev/null 2>&1; then
-      candidate_users+=("$u")
-      _seen_users[$u]=1
+remove_conflicting_packages() {
+    local p installed=()
+    for p in "${CONFLICTING_PACKAGES[@]}"; do
+        package_installed "$p" && installed+=("$p")
+    done
+    if (("${#installed[@]}")); then
+        log_step "Removing conflicting distribution packages..."
+        DEBIAN_FRONTEND=noninteractive apt-get remove -y "${installed[@]}"
+        log_ok "Conflicting packages are removed."
+    else
+        log_ok "No conflicting packages are installed."
     fi
-  fi
-done
+}
 
-if [ ${#candidate_users[@]} -eq 0 ]; then
-  log_info "No non-root user detected to add to the docker group."
-  printf "    If you want a regular user to run docker without sudo, run:\n"
-  printf "        sudo usermod -aG docker <username>\n"
-else
-  for u in "${candidate_users[@]}"; do
-    log_step "Adding $u to docker group..."
-    usermod -aG docker "$u"
-    check_status "Add $u to docker group" $?
-  done
-  printf "Log out and back in (or reboot) to use Docker without sudo.\n"
-  printf "You can also run the following command to apply the changes:\n"
-  printf "    newgrp docker\n"
-  printf "This will start a new shell with the docker group applied.\n"
-fi
+configure_repository() {
+    log_phase "REPOSITORY"
+    log_step "Installing apt prerequisites..."
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y ca-certificates curl
+    log_ok "Apt prerequisites are installed."
+    log_step "Adding Docker's signing key and apt source..."
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL "https://download.docker.com/linux/$REPO_FAMILY/gpg" -o /etc/apt/keyrings/docker.asc
+    chmod a+r /etc/apt/keyrings/docker.asc
+    rm -f /etc/apt/sources.list.d/docker.list
+    cat > /etc/apt/sources.list.d/docker.sources <<EOF
+Types: deb
+URIs: https://download.docker.com/linux/$REPO_FAMILY
+Suites: $REPO_SUITE
+Components: stable
+Architectures: $REPO_ARCH
+Signed-By: /etc/apt/keyrings/docker.asc
+EOF
+    apt-get update
+    log_ok "Docker's apt repository is ready."
+}
 
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-# Smoke test (non-fatal; informational)
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
-log_phase "VERIFY"
-docker_smoke_test || true
+install_docker() {
+    log_phase "DOCKER ENGINE"
+    log_step "Installing Docker Engine, Buildx, and Compose..."
+    DEBIAN_FRONTEND=noninteractive apt-get install -y "${DOCKER_PACKAGES[@]}"
+    log_ok "Docker Engine, Buildx, and Compose are installed."
+    log_phase "SERVICE"
+    log_step "Starting Docker..."
+    systemctl enable --now docker.service || true
+    if ! systemctl is-active --quiet docker.service; then
+        journalctl -u docker.service --no-pager -n 25 >&2 || true
+        fail "Docker did not start. Check systemctl status docker.service and the daemon log above."
+    fi
+    log_ok "Docker service is active."
+}
 
-log_complete "DOCKER INSTALLER COMPLETE"
-log_next "Log out and back in to use Docker without sudo."
-log_next "Or apply the group to this shell now:  newgrp docker"
+offer_group_access() {
+    local user="${SUDO_USER:-}"
+    [[ -n "$user" && "$user" != root ]] || return 0
+    id "$user" >/dev/null 2>&1 || return 0
+    if id -nG "$user" | grep -qw docker; then
+        log_ok "$user already belongs to the docker group."
+        return 0
+    fi
+    log_warn "The docker group grants root-level access to this host."
+    # This privilege grant requires a live answer even if ASSUME_YES is set.
+    if ASSUME_YES='' ask_confirm "Add $user to the docker group?" N; then
+        groupadd -f docker
+        usermod -aG docker "$user"
+        log_ok "$user is in the docker group."
+        log_next "Log out and back in before running docker without sudo."
+    else
+        log_info "Keeping $user out of the docker group. Use sudo docker for now."
+    fi
+}
+
+main() {
+    check_if_linux
+    as_root
+    banner "DOCKER INSTALLER" "engine · compose · buildx"
+    log_phase "PREFLIGHT"
+    command -v apt-get >/dev/null 2>&1 || fail "apt-get is required. Use Docker's guide for this distribution."
+    command -v dpkg-query >/dev/null 2>&1 || fail "dpkg-query is required for package checks."
+    command -v systemctl >/dev/null 2>&1 || fail "This installer requires systemd. Use Docker's manual instructions on this host."
+    [[ -n "$OS_ID" ]] || fail "Cannot read /etc/os-release."
+    select_repository
+    log_warn "Published container ports can bypass ufw/firewalld rules; review Docker's firewall guidance."
+    configure_repository
+    remove_conflicting_packages
+    install_docker
+    log_phase "VERIFY"
+    log_step "Running the hello-world container..."
+    if docker run --rm hello-world; then
+        log_ok "The hello-world container ran successfully."
+    else
+        log_warn "Docker is running, but hello-world failed. Check image downloads, networking, and journalctl -u docker.service."
+    fi
+    offer_group_access
+    log_complete "DOCKER INSTALLER COMPLETE"
+    log_next "Check the installed version with: docker version"
+    echo
+}
+
+main "$@"

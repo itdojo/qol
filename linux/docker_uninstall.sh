@@ -1,139 +1,128 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # docker_uninstall.sh
-#
-# Completely removes Docker: containers, images, volumes, networks, plugins,
-# packages, and data/config directories. THERE IS NO UNDO.
-#
-# Usage:
-#   sudo ./docker_uninstall.sh       # run directly
-#   source docker_uninstall.sh       # from another script (docker_install.sh
-#                                    # does this), then call: uninstall_docker
-#
-# Return codes from uninstall_docker:
-#   0   = Docker removed, user kept Docker ('n'), or Docker not installed
-#   1   = cannot uninstall (apt not available)
-#   130 = user chose 'q' (the caller should abort)
-#
-# Expects the IT Dojo terminal theme helpers (log_*, log_phase) to be loaded;
-# when run directly it sources linux/base_functions.sh itself.
-#
-# The run bookends live in the run-directly branch at the bottom, not in
-# uninstall_docker: when docker_install.sh sources this file and calls the
-# function mid-run, that run already has a banner and owns its own ending.
-# ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
+# Remove apt-installed Docker Engine, its data, and its apt repository.
+# This deletes containers, images, volumes, and custom daemon configuration.
+# Rootless user services/data and Docker Desktop are outside this script's scope.
+# Usage: sudo bash docker_uninstall.sh
+# May also be sourced and called as uninstall_docker.
+# Returns 0 for removed/kept/absent, 1 for an error, 130 for quit or EOF.
+# DOCKER_UNINSTALL_RESULT records removed, kept, or absent for a sourcing caller.
 
 uninstall_docker() {
-    if ! command -v apt-get >/dev/null 2>&1; then
-        log_err "Cannot uninstall Docker: apt package manager not found."
+    DOCKER_UNINSTALL_RESULT=""
+    if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+        log_err "Run as root. Usage: sudo bash docker_uninstall.sh"
+        return 1
+    fi
+    if ! command -v apt-get >/dev/null 2>&1 ||
+       ! command -v dpkg-query >/dev/null 2>&1 ||
+       ! command -v systemctl >/dev/null 2>&1; then
+        log_err "apt-get, dpkg-query, and systemctl are required to remove this Docker installation."
         return 1
     fi
 
-    if ! command -v docker >/dev/null 2>&1; then
-        log_info "Docker is not installed. Nothing to remove."
+    local packages=(docker-ce docker-ce-cli containerd.io docker-buildx-plugin
+                    docker-compose-plugin docker-ce-rootless-extras docker.io
+                    docker-compose docker-compose-v2 docker-buildx podman-docker)
+    local installed=() package choice
+    for package in "${packages[@]}"; do
+        [[ "$(dpkg-query -W -f='${Status}' "$package" 2>/dev/null || true)" == 'install ok installed' ]] &&
+            installed+=("$package")
+    done
+    if (("${#installed[@]}" == 0)) &&
+       [[ ! -e /var/lib/docker &&
+          ! -e /etc/docker && ! -e /etc/apt/sources.list.d/docker.sources &&
+          ! -e /etc/apt/sources.list.d/docker.list ]]; then
+        log_info "No apt-installed Docker packages or Docker data found."
+        DOCKER_UNINSTALL_RESULT=absent
         return 0
     fi
 
-    log_warn "You are about to completely remove Docker and ALL associated data (containers, images, volumes). There is no undo."
-
-    # Not ask_confirm: this is a three-way question (remove / keep / quit) and
-    # the 130 return is what tells a sourcing caller to abort. Borrow the shape
-    # of ask_confirm's prompt — ASK badge, then a jade caret — without its
-    # two-way semantics.
-    local confirm=""
+    log_warn "This removes Docker packages, containers, images, volumes, /var/lib/containerd, and local configuration. There is no undo."
+    # A three-way answer lets a sourcing installer distinguish keep from quit.
     while true; do
-        log_ask "Completely remove Docker?"
+        log_ask "Remove Docker and all local Docker data?"
         printf '    %s❯%s %s[y = remove / n = keep / q = quit]%s ' \
-            "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
-        read -r confirm
-        case "$confirm" in
+            "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET" >&2
+        if ! read -r choice; then
+            log_warn "No confirmation received. Docker was kept."
+            return 130
+        fi
+        case "$choice" in
             [Yy]) break ;;
-            [Nn])
-                log_info "Docker uninstall cancelled. Keeping the existing installation."
-                return 0
-                ;;
-            [Qq])
-                log_warn "Quitting at user request."
-                return 130
-                ;;
-            *) log_warn "Invalid input: '$confirm' (expected y, n, or q)." ;;
+            [Nn]) log_info "Docker was kept."; DOCKER_UNINSTALL_RESULT=kept; return 0 ;;
+            [Qq]) log_info "Quit without removing Docker."; return 130 ;;
+            *) log_warn "Enter y, n, or q." ;;
         esac
     done
 
-    log_step "Removing Docker in 5 seconds. Press CTRL-C to cancel..."
-    sleep 5
-
-    log_phase "CONTAINERS AND IMAGES"
-    log_step "Stopping and removing all containers, images, volumes, networks, and plugins..."
-    docker ps -aq        | xargs -r docker stop          2>/dev/null
-    docker ps -aq        | xargs -r docker rm -f         2>/dev/null
-    docker images -q     | xargs -r docker rmi -f        2>/dev/null
-    docker volume ls -q  | xargs -r docker volume rm -f  2>/dev/null
-    # Built-in networks (bridge/host/none) refuse removal; that's expected.
-    docker network ls -q | xargs -r docker network rm    2>/dev/null
-    docker plugin ls -q  | xargs -r docker plugin rm -f  2>/dev/null
-    log_info "Note: this does not remove Docker Swarm services, nodes, or secrets."
-
-    # Stop and disable the services BEFORE purging packages and deleting data.
-    # Tearing /var/lib/docker out from under a live daemon (overlay2 mounts,
-    # busy files) is how you leave the machine in a half-broken state.
     log_phase "SERVICES"
     log_step "Stopping Docker services..."
     systemctl disable --now docker.socket docker.service containerd.service 2>/dev/null || true
     systemctl stop docker.socket docker.service containerd.service 2>/dev/null || true
+    if systemctl is-active --quiet docker.socket ||
+       systemctl is-active --quiet docker.service ||
+       systemctl is-active --quiet containerd.service; then
+        log_err "Docker or containerd is still running. Stop it before removing data."
+        return 1
+    fi
+    log_ok "Docker services are stopped."
 
-    # Only purge packages that are actually installed — passing a name apt has
-    # never heard of (e.g. docker-engine on modern releases) aborts the whole
-    # apt-get purge command.
-    local pkgs=(docker-engine docker docker.io docker-ce docker-ce-cli
-                docker-ce-rootless-extras docker-buildx-plugin
-                docker-compose-plugin containerd.io podman-docker)
     log_phase "PACKAGES"
-    local installed=() p
-    for p in "${pkgs[@]}"; do
-        dpkg -s "$p" >/dev/null 2>&1 && installed+=("$p")
-    done
-    if [ "${#installed[@]}" -gt 0 ]; then
-        log_step "Purging Docker packages: ${installed[*]}"
-        DEBIAN_FRONTEND=noninteractive apt-get purge -y "${installed[@]}"
-        check_status "Purging Docker packages" $?
-        apt-get autoremove -y --purge
+    if (("${#installed[@]}")); then
+        log_step "Purging Docker packages..."
+        if ! DEBIAN_FRONTEND=noninteractive apt-get purge -y "${installed[@]}"; then
+            log_err "Docker package purge failed. Resolve apt errors before deleting Docker data."
+            return 1
+        fi
+        log_ok "Docker packages are purged."
     else
-        log_info "No Docker packages found to purge."
+        log_ok "No Docker packages are installed."
     fi
 
-    log_phase "DATA AND CONFIG"
-    log_step "Removing Docker data, configuration, and apt repository..."
-    rm -rf /var/lib/docker /var/lib/containerd /etc/docker
-    rm -rf /var/run/docker /var/run/docker.sock
-    rm -f  /usr/local/bin/docker-compose
-    rm -f  /etc/apt/sources.list.d/docker.list \
-           /etc/apt/keyrings/docker.asc /etc/apt/keyrings/docker.gpg
-
-    log_ok "Docker has been completely removed."
+    log_phase "DATA AND REPOSITORY"
+    log_step "Removing Docker data, configuration, and apt source..."
+    if ! rm -rf /var/lib/docker /var/lib/containerd /etc/docker ||
+       ! rm -f /etc/apt/sources.list.d/docker.sources /etc/apt/sources.list.d/docker.list ||
+       ! rm -f /etc/apt/keyrings/docker.asc /etc/apt/keyrings/docker.gpg; then
+        log_err "Docker data or repository cleanup failed. Check permissions and retry."
+        return 1
+    fi
+    # Older versions of docker_install.sh wrote this file. Leave other module
+    # configuration alone.
+    if [[ -f /etc/modules-load.d/docker.conf ]] &&
+       grep -q '^# Loaded by docker_install.sh' /etc/modules-load.d/docker.conf; then
+        if ! rm -f /etc/modules-load.d/docker.conf; then
+            log_err "Could not remove the legacy Docker modules file."
+            return 1
+        fi
+    fi
+    log_ok "Docker data and repository are removed."
+    DOCKER_UNINSTALL_RESULT=removed
     return 0
 }
 
-# When executed directly (not sourced), load the helpers and run. This branch
-# owns the run bookends; a sourcing caller does not reach it.
-if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
-    SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-    # shellcheck source=base_functions.sh
-    if ! source "${SCRIPT_DIR}/base_functions.sh" 2>/dev/null; then
-        # log_err is not available yet — this is the failure to load it. Hand-write
-        # the same 9-column prefix log_err emits at QOL_DEPTH=none.
-        printf '%s\n' "▌ STOP   base_functions.sh not found next to this script." \
-                      "▌ STOP   Get it from https://github.com/itdojo/qol." >&2
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    set -euo pipefail
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    # shellcheck source=linux/base_functions.sh
+    if ! source "$SCRIPT_DIR/base_functions.sh" 2>/dev/null; then
+        printf '%s\n' "▌ STOP   base_functions.sh is missing. Get it from https://github.com/itdojo/qol." >&2
         exit 1
     fi
-    banner "DOCKER UNINSTALLER" "containers · images · volumes · packages"
+    check_if_linux
     as_root
-    uninstall_docker
-    rc=$?
-    if [ "$rc" -eq 0 ]; then
-        log_complete "DOCKER UNINSTALLER COMPLETE"
-        log_next "Reinstall with:  ./docker_install.sh"
-        echo
+    banner "DOCKER UNINSTALLER" "packages · data · repository"
+    rc=0
+    uninstall_docker || rc=$?
+    if [[ "$rc" -eq 0 ]]; then
+        case "$DOCKER_UNINSTALL_RESULT" in
+            removed) log_complete "DOCKER REMOVED"; log_next "Reinstall with: sudo bash docker_install.sh" ;;
+            kept) log_complete "DOCKER KEPT" ;;
+            absent) log_complete "NO DOCKER INSTALLATION FOUND" ;;
+        esac
     fi
+    echo
     exit "$rc"
 fi

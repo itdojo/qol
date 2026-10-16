@@ -68,7 +68,8 @@ Which mechanism a script uses follows from where it can run, not from taste:
 |---|---|
 | `linux/base_functions.sh` | The canonical block. Everything else is a copy of this. |
 | `install_zsh_starship.sh` · `install_nano.sh` · `install_zsh.sh` · `uninstall_omz_p10k.sh` · `macos/install-nerd-fonts.sh` | Embed the full block — they run on macOS, where the Linux-only library is unavailable. |
-| `linux/docker_install.sh` · `linux/docker_uninstall.sh` · `linux/kernel_update.sh` · `linux/wireshark_install.sh` · `linux/nm-connection-maker.sh` · `tool_checks.sh` | Source `base_functions.sh`, with the auto-download-from-GitHub fallback (see `linux/kernel_update.sh`). |
+| `linux/docker_install.sh` · `linux/kernel_update.sh` · `linux/wireshark_install.sh` · `linux/nm-connection-maker.sh` · `tool_checks.sh` | Source `base_functions.sh`, with the auto-download-from-GitHub fallback (see `linux/kernel_update.sh`). |
+| `linux/docker_uninstall.sh` | Source `base_functions.sh` when run directly; require it beside the script. Sourcing the uninstaller defines its worker function without loading the theme. |
 | `netstatus.sh` | Embeds the generated ink block **only**. It prints a one-line readout at shell startup, so it takes the palette and none of the badge grammar. |
 | `shell-login-settings.sh` | Neither. Sourced into login shells, so it must stay dependency-free; it hand-writes the badge words with no ink, which is exactly what the helpers emit at `QOL_COLOR_DEPTH=none`. |
 | `gotime` | A third hand-written copy under `C_*` names, which the generator cannot reach. See the gotcha in `docs/working-notes.md`. |
@@ -133,7 +134,7 @@ Every script closes `main()` the same way:
 
 Jade-ruled completion block, then `NEXT` lines, then a trailing `echo` for breathing room before the prompt.
 
-**Bookends belong to a run, not to a function.** A file that is both runnable and sourceable — `linux/docker_uninstall.sh`, `uninstall_omz_p10k.sh` — puts `banner` and `log_complete` in its `if [[ "${BASH_SOURCE[0]}" == "${0}" ]]` branch, never inside the worker function. When `docker_install.sh` sources the uninstaller and calls it mid-run, that run already has a banner and owns its own ending; a second pair of jade rules in the middle of it says "the run ended" when it did not. A pure library (`tool_checks.sh`, `linux/base_functions.sh`) has no bookends at all.
+**Bookends belong to a run, not to a function.** A file that is both runnable and sourceable — `linux/docker_uninstall.sh`, `uninstall_omz_p10k.sh` — puts `banner` and `log_complete` in its `if [[ "${BASH_SOURCE[0]}" == "${0}" ]]` branch, never inside the worker function. A sourcing caller owns its own banner and ending. A pure library (`tool_checks.sh`, `linux/base_functions.sh`) has no bookends at all.
 
 **A completion block must not claim work that did not happen.** A `--dry-run`, a declined prompt, or a "nothing was installed" short-circuit still ends cleanly, but `log_complete "X REMOVED"` over a run that removed nothing is a lie the user reads as success. Track it — `uninstall_omz_p10k.sh` sets `NOTHING_DONE`, `install_nano.sh` tracks `nanorc_written`/`editor_written` — and say which kind of nothing it was.
 
@@ -161,7 +162,7 @@ Say which reason applies in a comment at the call site. "Not `ask_confirm`, beca
 ## Behavioral conventions
 
 - **Idempotent, always.** State-changing work lives in `ensure_*` functions that check before acting. Rerunning must not duplicate config lines, re-clone repos, or fail on existing state.
-- **Never run as root** — `check_for_root` exits 1; privilege comes from a `$SUDO` prefix variable set once (empty on macOS).
+- **Run as a normal user by default** — scripts that install system services, including the Docker scripts, explicitly require root. Other scripts use a `$SUDO` prefix for privileged commands.
 - **Traps:** CTRL-C exits 130 through `handle_ctrl_c`; `ERR` trap reports the line number and exit code. Both installed right after the theme block.
 - **Back up before touching a user dotfile** — one-time, timestamped, never clobber an existing backup: `cp "$f" "$f.pre<script>.$(date +%Y%m%d-%H%M%S).bak"` guarded by an `ls`-check.
 - **Edit files without changing their identity.** `replace_file_contents` (cat-over, not `mv`) keeps the destination's mode, owner, and inode — `mv` from `mktemp` silently tightens a 0644 file to 0600.
