@@ -1,578 +1,502 @@
 <!-- artifact: https://claude.ai/code/artifact/2f69d218-de11-496e-97a0-02b994872a3c -->
 <!-- favicon: ⛩ -->
-<!--
-  qol — terminal design system build status.
-  THIS PAGE IS A VIEW, NEVER A SOURCE. Every count below is re-derived from
-  `git log`, the plan's task list, and the test suites on each pass. Nothing is
-  incremented in place. If the page vanished, nothing would be lost.
-  Ledgers:  docs/superpowers/plans/2026-08-08-terminal-design-system.md
-            docs/working-notes.md
-            (docs/handoff.md is gone — deleted on completion, which is the signal)
-  Tokens:   ~/vaults/dojobrain/30-references/design-system/itdojo-design-system.md
--->
-<title>qol — Terminal Design System</title>
+<title>qol Status</title>
+<!-- THIS PAGE IS A VIEW, NEVER A SOURCE. Every figure is re-derived on each pass from git,
+     the test suites, docs/working-notes.md and the vault generator's QOL_FILES list; nothing is
+     incremented in place. No external loads: Fira Sans and Fira Code are named in the stacks and
+     used when installed locally; the fallbacks carry the page otherwise.
+
+     Layout: Ledger, the default in
+     ~/vaults/dojobrain/30-references/setup-decisions/status-page-order-is-fixed-inventory-is-not.md
+     Spine: Masthead · Verdict · Signals · Since · Open · Decided · Footer. History sits below it. -->
 
 <style>
-  :root {
-    --violet:#3E3566; --violet-solid:#3E3566; --violet-press:#2D2549;
-    --jade:#3CB858; --jade-press:#2EA049; --jade-text:#1E7A37;
-    --lavender:#F1ECFA; --mint:#D4F2E4;
-    --white:#FFFFFF; --gray-50:#FAFAFC; --gray-100:#ECEAF2;
-    --gray-300:#BEB9CC; --gray-500:#807A95; --gray-700:#2A2347; --gray-900:#14102B;
-    --success:#3CB858; --warning:#D89C2C; --danger:#A8334A; --info:#4A6FA5;
-    --text-on-action:#FFFFFF;
-    --shadow-sm:0 1px 2px rgba(62,53,102,0.08);
-    --shadow-md:0 4px 10px rgba(62,53,102,0.10);
+/* ── IT Dojo tokens, copied from ~/vaults/dojobrain/30-references/design-system/itdojo-design-system.html ── */
+:root {
 
-    /* terminal panel — near-black in BOTH themes, by design */
-    --terminal-bg:#08060F; --terminal-fg:#E4DEF5;
-    --terminal-step:#BCB0E8; --terminal-pass:#4ECE6A; --terminal-info:#7AA0D8;
-    --terminal-warn:#E0B45A; --terminal-stop:#E06B82; --terminal-meta:#9A93B5;
-    --terminal-rule:#4A4170; --terminal-sel:#241D3D;
+  /* ─── IT Dojo — color tokens. Violet is the ink, jade is the action. ─── */
+  /* primary */
+  --violet:#3E3566;
+  --jade:#3CB858;
+  --jade-press:#2EA049;
+  --violet-press:#2D2549;
+  /* accent — tinted light surfaces */
+  --lavender:#F1ECFA;
+  --mint:#D4F2E4;
+  /* neutral — cool gray, violet-tinted */
+  --white:#FFFFFF;
+  --gray-50:#FAFAFC;
+  --gray-100:#ECEAF2;
+  --gray-300:#BEB9CC;
+  --gray-500:#6B6582;
+  --gray-700:#2A2347;
+  --gray-900:#14102B;
+  /* semantic — state only, never branding */
+  --success:#3CB858;
+  --warning:#D89C2C;
+  --danger:#A8334A;
+  --info:#4A6FA5;
+  /* solid violet fill — only diverges from --violet in dark mode */
+  --violet-solid:var(--violet);
+  /* jade that passes contrast as text on white (links, prose) */
+  --jade-text:#1E7A37;
+  /* saffron that passes contrast as text on light surfaces (warn labels) */
+  --warning-text:#8C6014;
+  /* terminal panel — stays dark in both themes */
+  --terminal-bg:var(--gray-900);
+  --terminal-fg:var(--lavender);
+  --terminal-str:var(--mint);
+  --terminal-kw:#B69CFF;
+  --terminal-comment:var(--terminal-meta); /* the panel is dark in both themes; light gray-500 fails on it */
+  /* terminal ink — shell script STDOUT and TUIs. Literals, not theme-flipped:
+  a terminal has no light mode, so these hold their dark values always.
+  See the IT Dojo terminal design system note. */
+  --terminal-step:#BCB0E8;
+  --terminal-pass:#4ECE6A;
+  --terminal-info:#7AA0D8;
+  --terminal-warn:#E0B45A;
+  --terminal-stop:#E06B82;
+  --terminal-meta:#9A93B5;
+  --terminal-rule:#4A4170;
+  --terminal-sel:#241D3D;
+  --terminal-ok-bg:#15321F;
 
-    --font-text:'Roboto', system-ui, -apple-system, 'Segoe UI', sans-serif;
-    --font-mono:'Fira Code', ui-monospace, 'Cascadia Code', 'Source Code Pro', Consolas, monospace;
-    --fs-display:43px; --fs-h1:31px; --fs-h2:23px;
-    --fs-body:18px; --fs-small:16px; --fs-caption:14px;
-    --ls-caption:0.15em; --ls-badge:0.08em;
-    --sp-1:4px; --sp-2:8px; --sp-3:12px; --sp-4:16px;
-    --sp-5:24px; --sp-6:32px; --sp-7:48px; --sp-8:64px;
-    --r-xs:2px; --r-sm:4px; --r-md:6px; --r-pill:999px;
-    --content-max:980px; --stripe:3px;
-  }
+  /* ─── IT Dojo — typography tokens. Fira Sans for prose, Fira Code for every mono surface. ─── */
+  --font-text:'Fira Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono:'Fira Code', ui-monospace, 'Cascadia Code', 'Source Code Pro', Consolas, monospace;
+  --fs-display:43px;
+  --fs-h1:31px;
+  --fs-h2:23px;
+  --fs-body:18px;
+  --fs-small:16px;
+  --fs-caption:14px;
+  --lh-display:1.1; /* @kind font */
+  --lh-h1:1.2; /* @kind font */
+  --lh-h2:1.3; /* @kind font */
+  --lh-body:1.55; /* @kind font */
+  --lh-small:1.5; /* @kind font */
+  --lh-caption:1.4; /* @kind font */
+  --fw-regular:400; /* @kind font */
+  --fw-medium:500; /* @kind font */
+  --fw-bold:700; /* @kind font */
+  --ls-display:-0.02em;
+  --ls-h1:-0.01em;
+  --ls-caption:0.15em;  /* mono eyebrow / caption tracking */
+  --ls-badge:0.08em;    /* badge + callout icon tracking */
 
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --violet:#BCB0E8; --violet-solid:#4A3F7A; --violet-press:#5A4F90;
-      --jade:#4ECE6A; --jade-press:#3CB858; --jade-text:#4ECE6A;
-      --lavender:#241D3D; --mint:#15321F;
-      --white:#0F0B1E; --gray-50:#16112C; --gray-100:#2A2347;
-      --gray-300:#4A4170; --gray-500:#9A93B5; --gray-700:#C9C3DD; --gray-900:#DAD5EC;
-      --success:#4ECE6A; --warning:#E0B45A; --danger:#E06B82; --info:#7AA0D8;
-      --text-on-action:#0F0B1E;
-      --shadow-sm:0 1px 2px rgba(0,0,0,0.40);
-      --shadow-md:0 4px 10px rgba(0,0,0,0.50);
-    }
-  }
+  /* ─── IT Dojo — spacing (4px base) and radius. Density is a feature; radius is reserved. ─── */
+  --sp-1:4px;
+  --sp-2:8px;
+  --sp-3:12px;
+  --sp-4:16px;
+  --sp-5:24px;
+  --sp-6:32px;
+  --sp-7:48px;
+  --sp-8:64px;
+  --r-xs:2px;
+  --r-sm:4px;
+  --r-md:6px;
+  --r-lg:10px;
+  --r-pill:999px;
+  --measure:70ch;        /* max prose width */
+  --content-max:980px;   /* page column */
 
-  :root[data-theme="dark"] {
-    --violet:#BCB0E8; --violet-solid:#4A3F7A; --violet-press:#5A4F90;
-    --jade:#4ECE6A; --jade-press:#3CB858; --jade-text:#4ECE6A;
-    --lavender:#241D3D; --mint:#15321F;
-    --white:#0F0B1E; --gray-50:#16112C; --gray-100:#2A2347;
-    --gray-300:#4A4170; --gray-500:#9A93B5; --gray-700:#C9C3DD; --gray-900:#DAD5EC;
-    --success:#4ECE6A; --warning:#E0B45A; --danger:#E06B82; --info:#7AA0D8;
-    --text-on-action:#0F0B1E;
-    --shadow-sm:0 1px 2px rgba(0,0,0,0.40);
-    --shadow-md:0 4px 10px rgba(0,0,0,0.50);
-  }
+  /* ─── IT Dojo — elevation and borders. Violet-tinted shadows on light, plain black on dark. ─── */
+  --shadow-sm:0 1px 2px rgba(62,53,102,0.08);
+  --shadow-md:0 4px 10px rgba(62,53,102,0.10);
+  --shadow-lg:0 12px 28px rgba(62,53,102,0.14);
+  --focus-ring:0 0 0 2px var(--jade-text); /* a translucent halo was 1.18:1 */
+  --hairline:1px solid var(--gray-100);
+  --rule:1px solid var(--violet);
+  --border-input:1px solid var(--gray-300);
+  --stripe:3px;          /* accent / callout left stripe */
+  --motion-fast:120ms ease; /* @kind other */
+  --motion-theme:200ms ease; /* @kind other */
 
-  * { box-sizing: border-box; }
+  /* ─── IT Dojo — semantic aliases. Prefer these in product code; the base tokens above ─── */
+  /* text */
+  --text-heading:var(--violet);
+  --text-body:var(--violet);
+  --text-prose:var(--gray-900);     /* ledes, descriptive paragraphs */
+  --text-muted:var(--gray-500);     /* labels, captions, metadata */
+  --text-on-tint:var(--gray-700);
+  --text-on-action:#14102B;         /* dark ink on jade: white on #3CB858 is 2.56:1 */
+  --text-on-solid:#FFFFFF;          /* white on violet fills, both themes */
+  --text-on-danger:#FFFFFF;         /* white on wine (6.49:1) */
+  --text-link:var(--jade-text);
+  --text-link-hover:var(--violet);
+  /* surfaces */
+  --surface-page:var(--white);
+  --surface-raised:var(--gray-50);
+  --surface-card:var(--white);
+  --surface-tint-violet:var(--lavender);
+  --surface-tint-jade:var(--mint);
+  --surface-terminal:var(--terminal-bg);
+  /* lines */
+  --border-subtle:var(--gray-100);
+  --border-strong:var(--gray-300);
+  --border-rule:var(--violet);
+  /* action */
+  --action-primary:var(--jade);
+  --action-primary-hover:var(--jade-press);
+  --action-secondary:var(--violet-solid);
+  --action-secondary-hover:var(--violet-press);
+  --action-destructive:var(--danger);
+}
 
-  body {
-    margin: 0;
-    background: var(--white);
-    color: var(--violet);
-    font-family: var(--font-text);
-    font-size: var(--fs-body);
-    line-height: 1.55;
-    -webkit-font-smoothing: antialiased;
-  }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  /* colors.css */
+  --violet:#BCB0E8;
+  --violet-solid:#4A3F7A;
+  --violet-press:#5A4F90;
+  --jade:#4ECE6A;
+  --jade-press:#3CB858;
+  --jade-text:#4ECE6A;
+  --warning-text:#E0B45A;
+  --lavender:#241D3D;
+  --mint:#15321F;
+  --white:#0F0B1E;
+  --gray-50:#16112C;
+  --gray-100:#2A2347;
+  --gray-300:#4A4170;
+  --gray-500:#9A93B5;
+  --gray-700:#C9C3DD;
+  --gray-900:#DAD5EC;
+  --success:#4ECE6A;
+  --warning:#E0B45A;
+  --danger:#E06B82;
+  --info:#7AA0D8;
+  --terminal-bg:#08060F;
+  --terminal-fg:#E4DEF5;
+  --terminal-str:#86E6B0;
 
-  .wrap {
-    max-width: var(--content-max);
-    margin: 0 auto;
-    padding: var(--sp-7) var(--sp-5) var(--sp-8);
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-7);
-  }
+  /* elevation.css */
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.40);
+  --shadow-md:0 4px 10px rgba(0,0,0,0.50);
+  --shadow-lg:0 12px 28px rgba(0,0,0,0.60);
 
-  .eyebrow {
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: var(--ls-caption);
-    color: var(--gray-500);
-    margin: 0;
+  /* semantic.css */
+  --text-on-action:#0F0B1E;         /* dark text on the brightened jade */
+  --text-on-danger:#0F0B1E;         /* white on the lightened #E06B82 is 3.18:1 */
   }
+}
 
-  /* ── header ─────────────────────────────────────────────── */
-  .masthead {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: var(--sp-5);
-    flex-wrap: wrap;
-    border-bottom: 1px solid var(--violet);
-    padding-bottom: var(--sp-5);
-  }
-  .masthead h1 {
-    font-size: var(--fs-display);
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    font-weight: 700;
-    margin: var(--sp-2) 0 var(--sp-3);
-    text-wrap: balance;
-  }
-  .lede {
-    color: var(--gray-900);
-    margin: 0;
-    max-width: 62ch;
-  }
-  .toggle {
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: var(--ls-badge);
-    color: var(--violet);
-    background: transparent;
-    border: 1px solid var(--violet);
-    border-radius: var(--r-sm);
-    padding: var(--sp-2) var(--sp-4);
-    cursor: pointer;
-    transition: background 120ms ease, color 120ms ease;
-    flex-shrink: 0;
-  }
-  .toggle:hover { background: var(--violet-solid); color: #FFFFFF; }
-  :root[data-theme="dark"] .toggle:hover { color: var(--gray-900); }
-  .toggle:focus-visible { outline: none; box-shadow: 0 0 0 3px rgba(60,184,88,0.18); }
+:root[data-theme="dark"] {
+  /* colors.css */
+  --violet:#BCB0E8;
+  --violet-solid:#4A3F7A;
+  --violet-press:#5A4F90;
+  --jade:#4ECE6A;
+  --jade-press:#3CB858;
+  --jade-text:#4ECE6A;
+  --warning-text:#E0B45A;
+  --lavender:#241D3D;
+  --mint:#15321F;
+  --white:#0F0B1E;
+  --gray-50:#16112C;
+  --gray-100:#2A2347;
+  --gray-300:#4A4170;
+  --gray-500:#9A93B5;
+  --gray-700:#C9C3DD;
+  --gray-900:#DAD5EC;
+  --success:#4ECE6A;
+  --warning:#E0B45A;
+  --danger:#E06B82;
+  --info:#7AA0D8;
+  --terminal-bg:#08060F;
+  --terminal-fg:#E4DEF5;
+  --terminal-str:#86E6B0;
 
-  /* ── stat row ───────────────────────────────────────────── */
-  .stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: var(--sp-3);
-  }
-  .stat {
-    border: 1px solid var(--gray-300);
-    border-radius: var(--r-sm);
-    padding: var(--sp-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-1);
-    background: var(--surface, transparent);
-  }
-  .stat--lead { border-left: var(--stripe) solid var(--jade); }
-  .stat--flag { border-left: var(--stripe) solid var(--warning); }
-  .stat .n {
-    font-family: var(--font-mono);
-    font-size: var(--fs-h1);
-    font-weight: 700;
-    line-height: 1.1;
-    font-variant-numeric: tabular-nums;
-    color: var(--violet);
-  }
-  .stat .n small { font-size: var(--fs-small); color: var(--gray-500); font-weight: 400; }
-  .stat .k {
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    text-transform: uppercase;
-    letter-spacing: var(--ls-badge);
-    color: var(--gray-500);
-    font-weight: 500;
-  }
+  /* elevation.css */
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.40);
+  --shadow-md:0 4px 10px rgba(0,0,0,0.50);
+  --shadow-lg:0 12px 28px rgba(0,0,0,0.60);
 
-  /* ── terminal specimen ──────────────────────────────────── */
-  .specimen {
-    background: var(--terminal-bg);
-    border-left: var(--stripe) solid var(--jade);
-    border-radius: 0 var(--r-sm) var(--r-sm) 0;
-    padding: var(--sp-5);
-    overflow-x: auto;
-    box-shadow: var(--shadow-md);
-  }
-  .specimen pre {
-    margin: 0;
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
-    line-height: 1.7;
-    color: var(--terminal-fg);
-    white-space: pre;
-  }
-  .b-step { color: var(--terminal-step); font-weight: 700; }
-  .b-pass { color: var(--terminal-pass); font-weight: 700; }
-  .b-info { color: var(--terminal-info); font-weight: 700; }
-  .b-warn { color: var(--terminal-warn); font-weight: 700; }
-  .b-stop { color: var(--terminal-stop); font-weight: 700; }
-  .b-meta { color: var(--terminal-meta); }
-  .b-rule { color: var(--terminal-rule); }
-  .b-sel  { background: var(--terminal-sel); }
+  /* semantic.css */
+  --text-on-action:#0F0B1E;         /* dark text on the brightened jade */
+  --text-on-danger:#0F0B1E;         /* white on the lightened #E06B82 is 3.18:1 */
+}
 
-  section > h2 {
-    font-size: var(--fs-h2);
-    font-weight: 700;
-    line-height: 1.3;
-    margin: 0 0 var(--sp-2);
-  }
-  section > .sub { color: var(--gray-900); margin: 0 0 var(--sp-5); max-width: 68ch; }
+* { box-sizing: border-box; }
+html { background: var(--surface-page); }
+body {
+  margin: 0;
+  background: var(--surface-page);
+  color: var(--text-body);
+  font-family: var(--font-text);
+  font-size: var(--fs-body);
+  line-height: var(--lh-body);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-7) var(--sp-4) var(--sp-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-7);
+}
+.eyebrow, .crest {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-caption);
+  color: var(--text-muted);
+  margin: 0;
+}
+code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+  background: var(--lavender);
+  color: var(--violet);
+  padding: 1px 5px;
+  border-radius: var(--r-xs);
+  overflow-wrap: anywhere;
+}
 
-  /* ── task ledger ────────────────────────────────────────── */
-  .ledger { display: flex; flex-direction: column; gap: var(--sp-2); }
-  .task {
-    display: grid;
-    grid-template-columns: 2.5rem 1fr auto;
-    align-items: center;
-    gap: var(--sp-4);
-    padding: var(--sp-3) var(--sp-4);
-    border: 1px solid var(--gray-100);
-    border-radius: var(--r-sm);
-    border-left: var(--stripe) solid var(--gray-300);
-  }
-  .task--done { border-left-color: var(--jade); }
-  .task--live { border-left-color: var(--warning); background: var(--gray-50); }
-  .task--block { border-left-color: var(--danger); }
-  .task .num {
-    font-family: var(--font-mono);
-    font-size: var(--fs-small);
-    font-weight: 700;
-    color: var(--gray-500);
-    font-variant-numeric: tabular-nums;
-  }
-  .task .name { font-size: var(--fs-small); font-weight: 500; }
-  .task .name span { display: block; color: var(--gray-500); font-size: var(--fs-caption); font-weight: 400; }
+/* ── masthead ── */
+.masthead { border-bottom: var(--rule); padding-bottom: var(--sp-5); }
+.mast-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp-4); }
+.masthead h1 {
+  font-size: var(--fs-h1);
+  line-height: var(--lh-h1);
+  letter-spacing: var(--ls-h1);
+  font-weight: var(--fw-bold);
+  color: var(--text-heading);
+  margin: var(--sp-2) 0 var(--sp-3);
+  text-wrap: balance;
+}
+.stamp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+  margin: 0;
+}
+.stamp b { color: var(--violet); font-weight: var(--fw-medium); }
+.stamp + .stamp { margin-top: var(--sp-1); }
+.toggle {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-badge);
+  color: var(--violet);
+  background: transparent;
+  border: 1px solid var(--violet);
+  border-radius: var(--r-sm);
+  padding: var(--sp-2) var(--sp-3);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background var(--motion-fast), color var(--motion-fast);
+}
+.toggle:hover { background: var(--violet-solid); color: var(--text-on-solid); }
+.toggle:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 
-  .pill {
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: var(--ls-badge);
-    border-radius: var(--r-pill);
-    padding: var(--sp-1) var(--sp-3);
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: var(--sp-2);
-  }
-  .pill::before {
-    content: "";
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    flex-shrink: 0;
-  }
-  .pill--done { background: var(--mint); color: var(--jade-text); }
-  .pill--live { background: rgba(216,156,44,0.18); color: #8C6014; }
-  .pill--block { background: rgba(168,51,74,0.12); color: var(--danger); }
-  .pill--wait { background: var(--gray-100); color: var(--gray-700); }
-  :root[data-theme="dark"] .pill--live { color: var(--warning); }
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .pill--live { color: var(--warning); }
-  }
+/* ── sections ── */
+section > h2 {
+  font-size: var(--fs-h2);
+  line-height: var(--lh-h2);
+  font-weight: var(--fw-bold);
+  color: var(--text-heading);
+  margin: 0 0 var(--sp-4);
+}
+section > h2 .n {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  font-weight: var(--fw-regular);
+  color: var(--text-muted);
+  letter-spacing: 0;
+}
+.prose { color: var(--text-prose); margin: 0 0 var(--sp-3); max-width: var(--measure); }
+.prose:last-child { margin-bottom: 0; }
+.verdict {
+  border-left: var(--stripe) solid var(--jade);
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-4);
+}
 
-  /* ── open questions ─────────────────────────────────────── */
-  .q { display: flex; flex-direction: column; gap: var(--sp-3); }
-  .qrow {
-    border: 1px solid var(--gray-100);
-    border-left: var(--stripe) solid var(--info);
-    border-radius: 0 var(--r-sm) var(--r-sm) 0;
-    padding: var(--sp-4);
-  }
-  .qrow p { margin: var(--sp-2) 0 0; font-size: var(--fs-small); color: var(--gray-900); }
-  .qrow p.ptr {
-    margin-top: var(--sp-3);
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    color: var(--gray-500);
-  }
-  .qrow .who {
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    text-transform: uppercase;
-    letter-spacing: var(--ls-badge);
-    font-weight: 700;
-    color: var(--info);
-  }
-  code {
-    font-family: var(--font-mono);
-    font-size: 0.92em;
-    background: var(--lavender);
-    color: var(--violet);
-    padding: 1px 5px;
-    border-radius: var(--r-xs);
-  }
+/* ── signals ── */
+.sig { width: 100%; border-collapse: collapse; }
+.sig td { padding: var(--sp-3); border-bottom: var(--hairline); vertical-align: top; }
+.sig tr:first-child td { border-top: var(--hairline); }
+.stat-n {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h2);
+  font-weight: var(--fw-bold);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--violet);
+  width: 1%;
+}
+.stat-l { color: var(--text-prose); font-size: var(--fs-small); line-height: var(--lh-small); }
+.stat-src {
+  display: block;
+  margin-top: var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  line-height: var(--lh-caption);
+  color: var(--text-muted);
+}
+.sig tr.lead td:first-child { border-left: var(--stripe) solid var(--jade); }
+.sig tr.warn td:first-child { border-left: var(--stripe) solid var(--warning); }
 
-  /* ── footer ─────────────────────────────────────────────── */
-  footer {
-    border-top: 1px solid var(--gray-100);
-    padding-top: var(--sp-5);
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-3);
-  }
-  footer p { margin: 0; font-size: var(--fs-small); color: var(--gray-500); }
-  footer a { color: var(--jade-text); text-decoration: none; border-bottom: 1px solid var(--gray-300); }
-  footer a:hover { color: var(--violet); }
-  .crest {
-    font-family: var(--font-mono);
-    font-size: var(--fs-caption);
-    text-transform: uppercase;
-    letter-spacing: var(--ls-caption);
-    color: var(--gray-500);
-  }
+/* ── since / decided lists ── */
+.items { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--sp-3); }
+.items li {
+  border-left: var(--stripe) solid var(--border-strong);
+  padding: var(--sp-1) 0 var(--sp-1) var(--sp-4);
+  color: var(--text-prose);
+  font-size: var(--fs-small);
+  line-height: var(--lh-small);
+  max-width: var(--measure);
+}
+.items li .ptr {
+  display: block;
+  margin-top: var(--sp-1);
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  color: var(--text-muted);
+}
 
-  @media (prefers-reduced-motion: reduce) {
-    * { transition: none !important; animation: none !important; }
-  }
-  @media (max-width: 560px) {
-    .task { grid-template-columns: 2rem 1fr; }
-    .task .pill { grid-column: 2; justify-self: start; }
-  }
+/* ── open ── */
+.q { display: flex; flex-direction: column; gap: var(--sp-3); }
+.qrow {
+  border: var(--hairline);
+  border-left: var(--stripe) solid var(--info);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  padding: var(--sp-4);
+}
+.qrow .who {
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-badge);
+  font-weight: var(--fw-bold);
+  color: var(--info);
+}
+.qrow p { margin: var(--sp-2) 0 0; font-size: var(--fs-small); line-height: var(--lh-small); color: var(--text-prose); }
+.qrow .ptr { font-family: var(--font-mono); font-size: var(--fs-caption); color: var(--text-muted); }
+
+/* ── history ── */
+details { border-top: var(--hairline); padding-top: var(--sp-4); }
+summary {
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--fs-caption);
+  text-transform: uppercase;
+  letter-spacing: var(--ls-badge);
+  font-weight: var(--fw-bold);
+  color: var(--violet);
+}
+summary:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+details h3 { font-size: var(--fs-body); margin: var(--sp-5) 0 var(--sp-2); color: var(--text-heading); }
+details .prose { font-size: var(--fs-small); }
+
+/* ── footer ── */
+footer { border-top: var(--hairline); padding-top: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
+footer p { margin: 0; font-size: var(--fs-small); color: var(--text-muted); }
+footer a { color: var(--text-link); text-decoration: none; border-bottom: 1px solid var(--border-strong); }
+footer a:hover { color: var(--text-link-hover); }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 560px) {
+  .sig td { padding: var(--sp-2); }
+  .stat-n { font-size: var(--fs-body); white-space: normal; }
+}
 </style>
 
 <div class="wrap">
 
   <header class="masthead">
-    <div>
-      <p class="eyebrow">⛩ qol · terminal design system</p>
-      <h1>qol &mdash; every script converted, merged to main</h1>
-      <p class="lede">The emoji-and-basic-ANSI output theme is gone from the qol scripts, replaced by the IT Dojo terminal palette, with a generator in the vault so the shell copy of those token values cannot silently drift. The nine-task plan did the foundation and five scripts; a second pass took the remaining eleven, and finished one the plan had marked done. Four of the first pass's fixes came from running it on a real terminal rather than from the tests; the second pass's sharpest catch came from shellcheck, on code that <code>bash -n</code> called clean.</p>
+    <div class="mast-top">
+      <p class="eyebrow">⛩ qol · shell scripts and helpers</p>
+      <button class="toggle" id="themeBtn" type="button" aria-label="Toggle color theme">Theme</button>
     </div>
-    <button class="toggle" id="themeBtn" type="button" aria-label="Toggle color theme">Theme</button>
+    <h1>qol — in maintenance: the rebrand is done, gotime is retired, nothing is in flight</h1>
+    <p class="stamp"><span>as of <b>2026-10-17 23:12 EDT</b></span><span>written by <b>Claude Opus 5.5</b></span></p>
+    <p class="stamp"><span>branch <b>main</b></span><span>HEAD <b>de67790</b></span><span>tree <b>clean except this page</b></span><span>remote <b>in sync with origin/main</b></span></p>
   </header>
 
-  <!-- Every figure below is derived at 04467a2 (2026-08-09), the commit that last wrote this page.
-       Later commits are outside the two passes except 45ab4ec, noted in the footer. -->
-  <section class="stats" aria-label="Derived status">
-    <div class="stat stat--lead">
-      <!-- source: the plan's nine tasks + its Out of scope section, docs/superpowers/plans/2026-08-08-terminal-design-system.md -->
-      <span class="n">15<small> / 15</small></span>
-      <span class="k">scripts converted</span>
-    </div>
-    <div class="stat">
-      <!-- source: bash tests/run-all, at 04467a2 -->
-      <span class="n">417<small> / 417</small></span>
-      <span class="k">assertions passing</span>
-    </div>
-    <div class="stat">
-      <!-- source: git rev-list --count 13f8bf9^..04467a2, both passes only -->
-      <span class="n">27</span>
-      <span class="k">commits, both passes</span>
-    </div>
-    <div class="stat">
-      <!-- source: git ls-tree --name-only 04467a2 tests/ -- five then, seven now; the two later suites belong to unrelated work -->
-      <span class="n">5</span>
-      <span class="k">test suites at merge</span>
-    </div>
-    <div class="stat stat--flag">
-      <!-- source: docs/working-notes.md, the gotime-palette entry under Gotchas -->
-      <span class="n">1</span>
-      <span class="k">open question</span>
-    </div>
+  <section>
+    <h2>Verdict</h2>
+    <p class="prose verdict">Every script in the repo prints in the IT Dojo terminal palette, and every copy of that palette is now one the vault generator can check and rewrite. The last hand-written copy left with <code>gotime</code>, retired on 2026-10-17 because it was no longer used. Every test suite passes when run. No work is in flight, so there is no handoff file. The four open items below are known gaps, parked until something forces them.</p>
   </section>
 
   <section>
-    <h2>What it looks like now</h2>
-    <p class="sub">The vocabulary, rendered in the real ink values — five suites, 417 assertions, all passing. The prefix is exactly nine columns — gutter, space, four-character badge, three spaces — so message text always begins at column ten. That fixed width is what removed the per-marker padding table the old emoji vocabulary needed.</p>
-    <div class="specimen">
-<pre><span class="b-pass">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
-  <span class="b-pass">⛩ DOCKER INSTALLER ⛩</span>   <span class="b-meta">engine · compose · buildx</span>
-<span class="b-pass">━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━</span>
-
-<span class="b-rule">──</span> <span class="b-step">DOCKER ENGINE</span> <span class="b-rule">─────────────────────────────────────────</span>
-
-<span class="b-step">▌ STEP  </span> Installing docker-ce docker-ce-cli containerd.io...
-<span class="b-pass">▌ PASS  </span> docker-ce docker-ce-cli containerd.io are installed.
-<span class="b-info">▌ INFO  </span> Repository already configured; skipping.
-<span class="b-warn">▌ WARN  </span> p10k pull failed; continuing.
-<span class="b-stop">▌ STOP  </span> chsh failed. Change it manually:  chsh -s /bin/zsh
-<span class="b-step">▌ ASK   </span> Install the Nerd Font as well? [Y/n]
-<span class="b-info">▌ NEXT  </span> Log out and back in to use Docker without sudo.</pre>
-    </div>
+    <h2>Signals <span class="n">· re-derived 2026-10-17 23:12 EDT at de67790</span></h2>
+    <table class="sig">
+      <tr class="lead"><td class="stat-n">418 / 418</td><td class="stat-l">Assertions passing across five suites<span class="stat-src">each tests/*.sh run this pass · install-nano 296 · theme 105 · theme-sync 6 · kernel-activate-guard 6 · term-width 5 · 0 failed</span></td></tr>
+      <tr class="lead"><td class="stat-n">7 / 7</td><td class="stat-l">Palette copies the generator reaches and the sync test proves: the canonical block, five full embeds, and <code>netstatus.sh</code>'s ink-only region<span class="stat-src">~/vaults/dojobrain/scripts/build-design-tokens.py QOL_FILES · tests/test-theme-sync.sh 6 run, 0 failed</span></td></tr>
+      <tr><td class="stat-n">19</td><td class="stat-l">Shell scripts tracked<span class="stat-src">git ls-files '*.sh' | wc -l</span></td></tr>
+      <tr><td class="stat-n">18</td><td class="stat-l">Commits on <code>main</code> since 04467a2, the last full derivation of this page on 2026-08-09<span class="stat-src">git rev-list --count 04467a2..HEAD</span></td></tr>
+      <tr class="warn"><td class="stat-n">4</td><td class="stat-l">Open items, all parked<span class="stat-src">docs/working-notes.md § Gotchas, the "How to apply" lines that name unfinished work</span></td></tr>
+    </table>
   </section>
 
   <section>
-    <h2>Pass one — the nine tasks</h2>
-    <p class="sub">These were a real dependency chain, not a checklist — Task 9 documents the helpers Task 8 builds, so it could not land first. State is derived from <code>git log</code>, never from the plan's checkboxes; those were ticked afterward to match, having gone un-ticked through most of the execution. This pass built the foundation and converted five scripts; it named the other nine <em>out of scope</em>, which is what pass two picked up.</p>
-    <div class="ledger">
-
-      <div class="task task--done">
-        <span class="num">01</span>
-        <span class="name">Terminal ink tokens in the vault<span>nine <code>--terminal-*</code> literals in <code>tokens/colors.css</code></span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">02</span>
-        <span class="name">Generator emits the shell block<span><code>--emit-bash</code>, terminal-note drift check, qol drift check</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">03</span>
-        <span class="name">Rewrite the theme block in <code>base_functions.sh</code><span>depth tiers, badges, bookends, back-compat aliases</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">04</span>
-        <span class="name">Sync the block into <code>install_zsh_starship.sh</code><span>macOS cannot source the Linux-only library, so it embeds a copy</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">05</span>
-        <span class="name">Phases and bookends in <code>docker_install.sh</code><span>45 existing calls inherited the palette unchanged</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">06</span>
-        <span class="name">Phases and bookends in <code>install_zsh_starship.sh</code><span>five phases; the old blue-then-green ending retired</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">07</span>
-        <span class="name">Rebrand <code>gotime</code><span>the fzf cyan and blue become jade and violet; <code>⚡</code> becomes the <code>⛩</code> crest. Two defects closed first: an unused ink tripping SC2034, and a fatal tmux failure printing in WARN saffron rather than wine.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">08</span>
-        <span class="name">Build the three question shapes<span><code>ask_confirm</code> · <code>ask_value</code> · <code>ask_choice</code>, bash 3.2, no <code>read -N</code>. The plan's own test block carried four defects, including a <code>_read_key</code> case that could never pass — the right side of a pipe is a subshell.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">09</span>
-        <span class="name">Point <code>script-design.md</code> at the vault<span>the bash contract stays in the repo; the colors move to the design system note. A second description of a palette is a second thing to drift.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-    </div>
+    <h2>Since the last update <span class="n">· 2026-08-09 → 2026-10-17</span></h2>
+    <ul class="items">
+      <li><code>gotime</code> is gone: the script, its two test suites, the example config, the macOS alias, and its README and <code>script-design.md</code> rows. With it went the open question this page carried for two months, a palette copy nothing could check.<span class="ptr">9df24b7 · working-notes § Decisions, "gotime is decommissioned"</span></li>
+      <li><code>_term_cols</code> no longer kills a script that runs with no controlling terminal, such as cron, CI, an agent or <code>ssh host cmd</code>. Before the fix, a script under <code>set -E</code> died at its opening banner.<span class="ptr">45ab4ec · working-notes § Gotchas, "_term_cols needs both 2>/dev/null before </dev/tty and a trailing || true"</span></li>
+      <li><code>kernel_update.sh</code> offers to boot into the kernel it just installed, and refuses to reboot into one that cannot boot.<span class="ptr">bccf7b6 · 9808d25 · tests/test-kernel-activate-guard.sh</span></li>
+      <li>The public scripts no longer carry the vault's name. The generated-block marker dropped "dojobrain", and the two scripts student-setup republishes stopped citing the vault by path.<span class="ptr">6c26684 · 0b9d2c7 · working-notes § Decisions, both 2026-09-09</span></li>
+      <li>The shell configs were hardened for classroom seats: the hints banner no longer prints into a pipe, the <code>z</code> shadowing is documented as deliberate, Ubuntu's renamed <code>bat</code> and <code>fd</code> binaries are resolved at runtime, and Starship waits 2 s for the first run on a new Mac.<span class="ptr">ee0bb57 · 5c16d98 · e201c97 · 9fc5a89 · working-notes § Decisions and § Gotchas</span></li>
+      <li>The repo gained a <code>CLAUDE.md</code> agent contract, with <code>AGENTS.md</code> linked to it, and <code>zshrc-herdr-hints</code>.<span class="ptr">304f225</span></li>
+    </ul>
   </section>
 
   <section>
-    <h2>Pass two — the eleven that were out of scope</h2>
-    <p class="sub">The plan's <em>Out of scope</em> list was nine scripts; the real remainder was eleven, because two more carried their own stale theme copy. Which mechanism each one got follows from where it can run, never from taste — that table now lives in <code>script-design.md</code>. Ten commits, 19 files, +2017/−609.</p>
-    <div class="ledger">
-
-      <div class="task task--done">
-        <span class="num">01</span>
-        <span class="name">Source the library<span><code>tool_checks.sh</code> · <code>docker_uninstall.sh</code> · <code>wireshark_install.sh</code> · <code>kernel_update.sh</code>. They already inherited the palette; what they lacked was structure. Their pre-source bootstrap failures now hand-write the <code>▌ STOP</code> prefix, so a download that fails before <code>log_err</code> exists still greps with every other error.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">02</span>
-        <span class="name">Embed the block<span><code>install_nano.sh</code> · <code>install_zsh.sh</code> · <code>uninstall_omz_p10k.sh</code> · <code>install-nerd-fonts.sh</code>. All four run on macOS, so they carry the whole 328-line block — including the <code>ask_*</code> helpers they may never call. A partial copy is a restyle, and the sync test is byte-exact on purpose.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">03</span>
-        <span class="name">Stop copying, start sourcing<span><code>nm-connection-maker.sh</code> is Linux-only, so its private theme copy bought nothing. Now sources the library and drops ~60 lines; its hand-rolled menus became <code>ask_choice</code> and <code>ask_value</code>.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">04</span>
-        <span class="name">The two that are not runs<span><code>netstatus.sh</code> keeps its glyphs — they are its product, not log badges — and takes the palette alone. <code>shell-login-settings.sh</code> takes the badge words and no ink at all, staying dependency-free for login shells.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">05</span>
-        <span class="name">Finish what pass one marked done<span><code>docker_install.sh</code> was ticked at Task 05, but that task only added phases and bookends. Its body still carried a <code>🥧</code>, <code>style_text</code> calls with legacy color names, and naked <code>printf</code> where milestones belong.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-      <div class="task task--done">
-        <span class="num">06</span>
-        <span class="name">Close the drift surface<span>The sync test guarded one copy; there are six. It loops over all of them now, and the vault's <code>QOL_FILES</code> went from two entries to seven, so <code>--check</code> and <code>--write-qol</code> reach every copy that uses the <code>QOL_*</code> names.</span></span>
-        <span class="pill pill--done">Committed</span>
-      </div>
-
-    </div>
-  </section>
-
-  <section>
-    <h2>What only a real terminal caught</h2>
-    <p class="sub">The plan ended each visual task with <em>run it and compare against the reference</em>, and forbade claiming those steps from inspection. That instruction earned its place: four of the seven fixes below exist because the scripts were run on a real screen and the results measured. Every one of them passed <code>bash -n</code>, shellcheck, and the full suite first.</p>
+    <h2>Open <span class="n">· 4 · all parked · none blocks current work</span></h2>
     <div class="q">
-
       <div class="qrow">
-        <span class="who">Flicker · c7dc1e6</span>
-        <p><code>draw()</code> opened with <code>tput clear</code>, which emits <code>ESC[H ESC[J</code> — home, then wipe. The forty writes that repaint the frame are separate, so the terminal rendered the empty screen in between: <strong>29 blanks, one per keypress, 33 ms each</strong>, visible ink dropping from ~593 px to ~30. It predated the rebrand entirely. Now the cursor homes, each line erases its own tail, and the erase-to-end runs <em>after</em> the frame is painted.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;Never clear the screen at the top of a TUI redraw&rdquo;</p>
+        <span class="who">Parked · you or an agent</span>
+        <p><code>linux/docker_install.sh</code> cannot run under <code>bash &lt;(curl …)</code> because its <code>SCRIPT_DIR</code> resolves to a pipe. A writable fallback would let it use the same one-liner as the Starship installer. Until then, the README's two different install forms are deliberate.</p>
+        <p class="ptr">working-notes § Gotchas, "docker_install.sh cannot run under bash &lt;(curl …)"</p>
       </div>
-
       <div class="qrow">
-        <span class="who">Width ceiling · b1f0499</span>
-        <p>Every full-width element — rules, bookends, both selection bars — had been <strong>80 columns wide regardless of the terminal</strong>. One redirect did it: <code>$(tput cols 2>/dev/null)</code> makes ncurses read the window size off stderr, and the redirect throws that fd away, so it falls back to the static terminfo value. Found by measuring rather than looking: two screenshots at different window sizes both showed a rule of exactly 1759 px.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;Never put <code>2&gt;/dev/null</code> on a <code>tput</code> you are capturing&rdquo;, plus the 1759&nbsp;px symptom entry beside it</p>
+        <span class="who">Parked · you or an agent</span>
+        <p>On a machine without tpm or catppuccin, <code>configs/tmux.conf</code> prints two <code>returned 127</code> errors at every start. Wrapping the two <code>run</code> lines in an <code>if-shell</code> existence guard would give a bare machine a working tmux.</p>
+        <p class="ptr">working-notes § Gotchas, "configs/tmux.conf runs two plugins by absolute path that nothing here installs"</p>
       </div>
-
       <div class="qrow">
-        <span class="who">Truncated bars · 13afa3a · a14e915</span>
-        <p>Both selection bars stopped at the last character instead of reaching the edge. The tempting fix — stretch the background with <code>CLR_EOL</code> — is wrong here: <code>screen</code> and <code>tmux</code> advertise no <code>bce</code>, so <code>ESC[K</code> erases to the <em>default</em> background and truncates anyway. Installers run under tmux over SSH constantly, so both bars are painted with real spaces now.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;A selection bar is padded with spaces, never stretched with <code>CLR_EOL</code>&rdquo;, plus the <code>gotime</code> entry beside it</p>
+        <span class="who">Parked · checked by hand</span>
+        <p>student-setup ships copies of <code>install_nano.sh</code> and <code>install_zsh_starship.sh</code>. Tests on both sides keep the theme block in those copies in sync, but nothing else in them. Re-copy both scripts whenever either changes.</p>
+        <p class="ptr">working-notes § Gotchas, "student-setup vendors two of this repo's scripts"</p>
       </div>
-
       <div class="qrow">
-        <span class="who">Not a defect</span>
-        <p>A 256-colour check came back looking identical to truecolor — pixel-identical, in fact, zero channel delta. The tier was fine; <code>QOL_COLOR_DEPTH=256</code> on its own line is a shell variable, not an environment one, so the child process never saw it. The failure mode is silence: the screen looks correct, just not at the depth you asked for.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;<code>QOL_COLOR_DEPTH</code> must be exported or prefixed, and the failure mode is silence&rdquo;</p>
+        <span class="who">Parked · checked by hand</span>
+        <p><code>configs/starship.toml</code> and the heredoc inside <code>install_zsh_starship.sh</code> are meant to be byte-identical after the script's six-line header, but no test checks this. Change both together.</p>
+        <p class="ptr">working-notes § Gotchas, "Starship's command_timeout is 2000"</p>
       </div>
-
     </div>
   </section>
 
   <section>
-    <h2>What pass two turned up</h2>
-    <p class="sub">Pass one's findings came from a screen. Pass two's came from tools and from reading the code for what it would do under a different environment — the conversion itself was mechanical, and every interesting thing was a consequence nobody had asked about.</p>
-    <div class="q">
-
-      <div class="qrow">
-        <span class="who">A cache cannot be themed · 66744fb</span>
-        <p><code>netstatus.sh</code> cached its <em>rendered</em> line. Painting it in place would have written ANSI into <code>~/.cache/qol/netstatus</code> — and then a <code>NO_COLOR=1</code> shell would replay the escapes, while one piped run would poison the cache uncoloured for every shell after it. The cache now holds the state token and the label; <code>_ns_paint</code> applies ink at print time, so <strong>the shell doing the printing decides</strong>. Migration needed no version field: the old format's line 2 was a rendered line, which can never match one of the five state tokens.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;A cache that stores rendered text cannot be themed&rdquo;</p>
-      </div>
-
-      <div class="qrow">
-        <span class="who">shellcheck is the gate, not <code>bash -n</code></span>
-        <p>Generating shell from a Python heredoc double-escaped the line continuations, so <code>printf '%s\n' "line one" \</code> ended in a literal <code>\\</code> — a valid escaped-backslash argument — and <strong>the continued line silently became its own command</strong>. Every affected file still parsed clean. <code>shellcheck -x</code> flagged it as SC2288. <code>bash -n</code> only proves a file is <em>a</em> program, not the one you meant.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;<code>bash -n</code> does not catch a broken line continuation, and <code>shellcheck</code> does&rdquo;</p>
-      </div>
-
-      <div class="qrow">
-        <span class="who">A helper can smuggle in a contract</span>
-        <p><code>ask_confirm</code> returns yes whenever <code>ASSUME_YES</code> is set. Right for the two scripts that publish a <code>--yes</code> flag; wrong for <code>kernel_update.sh</code>, which publishes none — converting its <code>rpi-update</code> prompt would have let a stray environment variable flash <strong>unreleased firmware to a Pi</strong> that the prompt exists to protect. Four prompts kept their own <code>read</code> and took only the ASK chrome. The reasons are now in <code>script-design.md</code>, because "not <code>ask_confirm</code>, because…" is what separates a considered exception from not knowing the helper existed.</p>
-        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;<code>ASSUME_YES</code> is a contract, not a convenience&rdquo;; the four legitimate exceptions are in <code>script-design.md</code> &sect; Asking questions</p>
-      </div>
-
-      <div class="qrow">
-        <span class="who">A clean exit is not a completion</span>
-        <p>A <code>--dry-run</code>, a declined prompt, and a nothing-to-do short-circuit all end at status 0, and all three used to fall through to a jade-ruled block announcing the work. <code>uninstall_omz_p10k.sh</code> now tracks which kind of nothing happened and says so. A completion badge over a run that changed nothing is a lie the reader takes as success.</p>
-        <p class="ptr">Recorded: <code>script-design.md</code> &sect; Ending &mdash; &ldquo;A completion block must not claim work that did not happen&rdquo;. No <code>working-notes.md</code> entry: the rule is house style, so that file is its home.</p>
-      </div>
-
-    </div>
+    <h2>Decided <span class="n">· each recorded where it binds, not here</span></h2>
+    <ul class="items">
+      <li>Retire <code>gotime</code> rather than wire it into the generator. The owner no longer used it, and wiring it in would have meant a variable-prefix argument in the generator for a tool nobody ran.<span class="ptr">working-notes § Decisions, 2026-10-17 · vault: itdojo-terminal-design-system names ask_choice as the menu reference</span></li>
+      <li>The theme block's comment "sharing gotime's chrome" stays. Changing it would mean editing about fifteen byte-synced copies across several repos, and it records lineage, not a dependency.<span class="ptr">working-notes § Decisions, 2026-10-17</span></li>
+      <li>The palette's source of truth is the vault. This repo holds copies, never originals.<span class="ptr">working-notes § Decisions · script-design.md</span></li>
+      <li>Color depth is defaulted and never detected. Truecolor is assumed, and <code>QOL_COLOR_DEPTH</code> forces a lower tier.<span class="ptr">working-notes § Decisions</span></li>
+      <li>A token ink with no reader gets a shellcheck suppression and stays. An SGR attribute with no reader is deleted.<span class="ptr">working-notes § Gotchas, "Unused color variables trip shellcheck SC2034"</span></li>
+    </ul>
   </section>
 
-  <section>
-    <h2>The one open question</h2>
-    <p class="sub">Recorded in <code>docs/working-notes.md</code>; this page only points at it.</p>
-    <div class="q">
-
-      <div class="qrow">
-        <span class="who">Still open — accept the gap</span>
-        <p><code>gotime</code> carries a copy of the palette that nothing validates. It is not in the generator's <code>QOL_FILES</code>, so <code>--check</code> never sees it and <code>--write-qol</code> cannot reach it. Closing that is not a one-line change: <code>gotime</code> names its inks <code>C_*</code> because some thirty <code>printf</code> call sites depend on those names, while the emitter writes <code>QOL_*</code>, so the generator would need a variable-prefix argument first. Verified by hand at the time it landed; verify by hand after any token change until someone does that work.</p>
-        <p>Pass two made it the <em>only</em> one. <code>netstatus.sh</code> needed the palette and none of the badge grammar, and the obvious move — hand-writing the five inks it reads — would have repeated this exact mistake. It carries the same marker-bounded generated region instead, under the same <code>QOL_*</code> names, so it costs three unread ink variables and a <code># shellcheck disable=SC2034</code> and buys full coverage. Six of the seven copies are now guarded by both the generator and <code>test-theme-sync.sh</code>.</p>
-      </div>
-
-    </div>
-  </section>
+  <details>
+    <summary>History · the terminal design system rebrand, 2026-08-08 → 2026-08-09</summary>
+    <h3>Superseded verdict: every script converted, merged to main</h3>
+    <p class="prose">The scripts' emoji and basic-ANSI output was replaced by the IT Dojo terminal palette, with a generator in the vault so the shell copies of the token values cannot drift silently. A nine-task plan built the foundation and converted five scripts. A second pass converted the remaining eleven and finished one the plan had marked done. At 04467a2 the two passes totalled 27 commits and 417 passing assertions.</p>
+    <p class="prose">Running the scripts on a real terminal caught four fixes that the tests had not: TUI redraw flicker, every full-width element pinned at 80 columns by one <code>2&gt;/dev/null</code>, selection bars cut short under tmux, and a 256-color check that only seemed broken. Pass two's best catch came from shellcheck, on code that <code>bash -n</code> had called clean. Each lesson is in <code>docs/working-notes.md</code> § Gotchas. The plan is <code>docs/superpowers/plans/2026-08-08-terminal-design-system.md</code>, kept as written.</p>
+  </details>
 
   <footer>
     <p class="crest">⛩ The Place of the Way</p>
-    <p>Complete as of <strong>2026-08-09</strong>; every figure on this page is derived at <code>04467a2</code>, the commit that last wrote it — 27 commits, 23 files, +5122/−764 across both passes. Five commits have landed on <code>main</code> since, four of them unrelated work; the fifth, <code>45ab4ec</code>, hardens the <code>_term_cols</code> helper that pass one's width fix introduced. Counts re-derived each pass from <code>git log</code>, the plan, and the test suites; this page is a view, never a source.</p>
-    <p>Durable knowledge: <a href="working-notes.md">docs/working-notes.md</a> · House style: <a href="../script-design.md">script-design.md</a> · Plan: <a href="superpowers/plans/2026-08-08-terminal-design-system.md">the nine tasks</a>, whose <em>Out of scope</em> section records what pass two did to it. The handoff file is gone, which is how it says the stream is closed.</p>
-    <p>Palette source of truth: <code>~/vaults/dojobrain/30-references/design-system/</code>. This repo holds copies, never originals.</p>
+    <p>No <code>docs/handoff.md</code>: nothing is in flight, and the missing file is how this page says the stream is closed.</p>
+    <p>Durable knowledge: <a href="working-notes.md">docs/working-notes.md</a> · House style: <a href="../script-design.md">script-design.md</a> · Palette source of truth: <code>~/vaults/dojobrain/30-references/design-system/</code>. This page is a view, never a source; every figure is re-derived on each pass.</p>
   </footer>
 
 </div>
@@ -584,12 +508,9 @@
     var saved = null;
     try { saved = localStorage.getItem('qol-status-theme'); } catch (e) {}
     if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
-
     btn.addEventListener('click', function () {
       var explicit = root.getAttribute('data-theme');
-      var isDark = explicit
-        ? explicit === 'dark'
-        : window.matchMedia('(prefers-color-scheme: dark)').matches;
+      var isDark = explicit ? explicit === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
       var next = isDark ? 'light' : 'dark';
       root.setAttribute('data-theme', next);
       try { localStorage.setItem('qol-status-theme', next); } catch (e) {}
