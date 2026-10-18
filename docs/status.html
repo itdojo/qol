@@ -272,6 +272,12 @@
     padding: var(--sp-4);
   }
   .qrow p { margin: var(--sp-2) 0 0; font-size: var(--fs-small); color: var(--gray-900); }
+  .qrow p.ptr {
+    margin-top: var(--sp-3);
+    font-family: var(--font-mono);
+    font-size: var(--fs-caption);
+    color: var(--gray-500);
+  }
   .qrow .who {
     font-family: var(--font-mono);
     font-size: var(--fs-caption);
@@ -322,30 +328,37 @@
   <header class="masthead">
     <div>
       <p class="eyebrow">⛩ qol · terminal design system</p>
-      <h1>Every script converted, merged to main</h1>
+      <h1>qol &mdash; every script converted, merged to main</h1>
       <p class="lede">The emoji-and-basic-ANSI output theme is gone from the qol scripts, replaced by the IT Dojo terminal palette, with a generator in the vault so the shell copy of those token values cannot silently drift. The nine-task plan did the foundation and five scripts; a second pass took the remaining eleven, and finished one the plan had marked done. Four of the first pass's fixes came from running it on a real terminal rather than from the tests; the second pass's sharpest catch came from shellcheck, on code that <code>bash -n</code> called clean.</p>
     </div>
     <button class="toggle" id="themeBtn" type="button" aria-label="Toggle color theme">Theme</button>
   </header>
 
+  <!-- Every figure below is derived at 04467a2 (2026-08-09), the commit that last wrote this page.
+       Later commits are outside the two passes except 45ab4ec, noted in the footer. -->
   <section class="stats" aria-label="Derived status">
     <div class="stat stat--lead">
+      <!-- source: the plan's nine tasks + its Out of scope section, docs/superpowers/plans/2026-08-08-terminal-design-system.md -->
       <span class="n">15<small> / 15</small></span>
       <span class="k">scripts converted</span>
     </div>
     <div class="stat">
+      <!-- source: bash tests/run-all, at 04467a2 -->
       <span class="n">417<small> / 417</small></span>
       <span class="k">assertions passing</span>
     </div>
     <div class="stat">
+      <!-- source: git rev-list --count 13f8bf9^..04467a2, both passes only -->
       <span class="n">27</span>
-      <span class="k">commits on main</span>
+      <span class="k">commits, both passes</span>
     </div>
     <div class="stat">
+      <!-- source: git ls-tree --name-only 04467a2 tests/ -- five then, seven now; the two later suites belong to unrelated work -->
       <span class="n">5</span>
-      <span class="k">test suites</span>
+      <span class="k">test suites at merge</span>
     </div>
     <div class="stat stat--flag">
+      <!-- source: docs/working-notes.md, the gotime-palette entry under Gotchas -->
       <span class="n">1</span>
       <span class="k">open question</span>
     </div>
@@ -485,21 +498,25 @@
       <div class="qrow">
         <span class="who">Flicker · c7dc1e6</span>
         <p><code>draw()</code> opened with <code>tput clear</code>, which emits <code>ESC[H ESC[J</code> — home, then wipe. The forty writes that repaint the frame are separate, so the terminal rendered the empty screen in between: <strong>29 blanks, one per keypress, 33 ms each</strong>, visible ink dropping from ~593 px to ~30. It predated the rebrand entirely. Now the cursor homes, each line erases its own tail, and the erase-to-end runs <em>after</em> the frame is painted.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;Never clear the screen at the top of a TUI redraw&rdquo;</p>
       </div>
 
       <div class="qrow">
         <span class="who">Width ceiling · b1f0499</span>
         <p>Every full-width element — rules, bookends, both selection bars — had been <strong>80 columns wide regardless of the terminal</strong>. One redirect did it: <code>$(tput cols 2>/dev/null)</code> makes ncurses read the window size off stderr, and the redirect throws that fd away, so it falls back to the static terminfo value. Found by measuring rather than looking: two screenshots at different window sizes both showed a rule of exactly 1759 px.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;Never put <code>2&gt;/dev/null</code> on a <code>tput</code> you are capturing&rdquo;, plus the 1759&nbsp;px symptom entry beside it</p>
       </div>
 
       <div class="qrow">
         <span class="who">Truncated bars · 13afa3a · a14e915</span>
         <p>Both selection bars stopped at the last character instead of reaching the edge. The tempting fix — stretch the background with <code>CLR_EOL</code> — is wrong here: <code>screen</code> and <code>tmux</code> advertise no <code>bce</code>, so <code>ESC[K</code> erases to the <em>default</em> background and truncates anyway. Installers run under tmux over SSH constantly, so both bars are painted with real spaces now.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;A selection bar is padded with spaces, never stretched with <code>CLR_EOL</code>&rdquo;, plus the <code>gotime</code> entry beside it</p>
       </div>
 
       <div class="qrow">
         <span class="who">Not a defect</span>
         <p>A 256-colour check came back looking identical to truecolor — pixel-identical, in fact, zero channel delta. The tier was fine; <code>QOL_COLOR_DEPTH=256</code> on its own line is a shell variable, not an environment one, so the child process never saw it. The failure mode is silence: the screen looks correct, just not at the depth you asked for.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;<code>QOL_COLOR_DEPTH</code> must be exported or prefixed, and the failure mode is silence&rdquo;</p>
       </div>
 
     </div>
@@ -513,21 +530,25 @@
       <div class="qrow">
         <span class="who">A cache cannot be themed · 66744fb</span>
         <p><code>netstatus.sh</code> cached its <em>rendered</em> line. Painting it in place would have written ANSI into <code>~/.cache/qol/netstatus</code> — and then a <code>NO_COLOR=1</code> shell would replay the escapes, while one piped run would poison the cache uncoloured for every shell after it. The cache now holds the state token and the label; <code>_ns_paint</code> applies ink at print time, so <strong>the shell doing the printing decides</strong>. Migration needed no version field: the old format's line 2 was a rendered line, which can never match one of the five state tokens.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;A cache that stores rendered text cannot be themed&rdquo;</p>
       </div>
 
       <div class="qrow">
         <span class="who">shellcheck is the gate, not <code>bash -n</code></span>
         <p>Generating shell from a Python heredoc double-escaped the line continuations, so <code>printf '%s\n' "line one" \</code> ended in a literal <code>\\</code> — a valid escaped-backslash argument — and <strong>the continued line silently became its own command</strong>. Every affected file still parsed clean. <code>shellcheck -x</code> flagged it as SC2288. <code>bash -n</code> only proves a file is <em>a</em> program, not the one you meant.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;<code>bash -n</code> does not catch a broken line continuation, and <code>shellcheck</code> does&rdquo;</p>
       </div>
 
       <div class="qrow">
         <span class="who">A helper can smuggle in a contract</span>
         <p><code>ask_confirm</code> returns yes whenever <code>ASSUME_YES</code> is set. Right for the two scripts that publish a <code>--yes</code> flag; wrong for <code>kernel_update.sh</code>, which publishes none — converting its <code>rpi-update</code> prompt would have let a stray environment variable flash <strong>unreleased firmware to a Pi</strong> that the prompt exists to protect. Four prompts kept their own <code>read</code> and took only the ASK chrome. The reasons are now in <code>script-design.md</code>, because "not <code>ask_confirm</code>, because…" is what separates a considered exception from not knowing the helper existed.</p>
+        <p class="ptr">Recorded: <code>docs/working-notes.md</code> &sect; Gotchas &mdash; &ldquo;<code>ASSUME_YES</code> is a contract, not a convenience&rdquo;; the four legitimate exceptions are in <code>script-design.md</code> &sect; Asking questions</p>
       </div>
 
       <div class="qrow">
         <span class="who">A clean exit is not a completion</span>
         <p>A <code>--dry-run</code>, a declined prompt, and a nothing-to-do short-circuit all end at status 0, and all three used to fall through to a jade-ruled block announcing the work. <code>uninstall_omz_p10k.sh</code> now tracks which kind of nothing happened and says so. A completion badge over a run that changed nothing is a lie the reader takes as success.</p>
+        <p class="ptr">Recorded: <code>script-design.md</code> &sect; Ending &mdash; &ldquo;A completion block must not claim work that did not happen&rdquo;. No <code>working-notes.md</code> entry: the rule is house style, so that file is its home.</p>
       </div>
 
     </div>
@@ -549,7 +570,7 @@
 
   <footer>
     <p class="crest">⛩ The Place of the Way</p>
-    <p>Complete as of <strong>2026-08-09</strong>, merged to <code>main</code> at <code>ea52e70</code> — 27 commits, 23 files, +5122/−764 across both passes. Counts re-derived each pass from <code>git log</code>, the plan, and the test suites; this page is a view, never a source.</p>
+    <p>Complete as of <strong>2026-08-09</strong>; every figure on this page is derived at <code>04467a2</code>, the commit that last wrote it — 27 commits, 23 files, +5122/−764 across both passes. Five commits have landed on <code>main</code> since, four of them unrelated work; the fifth, <code>45ab4ec</code>, hardens the <code>_term_cols</code> helper that pass one's width fix introduced. Counts re-derived each pass from <code>git log</code>, the plan, and the test suites; this page is a view, never a source.</p>
     <p>Durable knowledge: <a href="working-notes.md">docs/working-notes.md</a> · House style: <a href="../script-design.md">script-design.md</a> · Plan: <a href="superpowers/plans/2026-08-08-terminal-design-system.md">the nine tasks</a>, whose <em>Out of scope</em> section records what pass two did to it. The handoff file is gone, which is how it says the stream is closed.</p>
     <p>Palette source of truth: <code>~/vaults/dojobrain/30-references/design-system/</code>. This repo holds copies, never originals.</p>
   </footer>
