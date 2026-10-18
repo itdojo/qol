@@ -18,7 +18,6 @@ alias vimconfig='${EDITOR:-vim} $HOME/.vimrc'
 #alias vim=nvim
 alias fleet="~/fleet/fleet"
 alias claude="claude --chrome"   # https://code.claude.com/docs/en/chrome
-alias gotime="~/projects/qol/gotime"
 
 # ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
 #                                                                                     ALIASES: TMUX

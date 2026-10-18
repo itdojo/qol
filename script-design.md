@@ -72,7 +72,6 @@ Which mechanism a script uses follows from where it can run, not from taste:
 | `linux/docker_uninstall.sh` | Source `base_functions.sh` when run directly; require it beside the script. Sourcing the uninstaller defines its worker function without loading the theme. |
 | `netstatus.sh` | Embeds the generated ink block **only**. It prints a one-line readout at shell startup, so it takes the palette and none of the badge grammar. |
 | `shell-login-settings.sh` | Neither. Sourced into login shells, so it must stay dependency-free; it hand-writes the badge words with no ink, which is exactly what the helpers emit at `QOL_COLOR_DEPTH=none`. |
-| `gotime` | A third hand-written copy under `C_*` names, which the generator cannot reach. See the gotcha in `docs/working-notes.md`. |
 
 `tests/test-theme-sync.sh` proves every copy in the first four rows still matches the canonical block. Run it after touching any of them, and after a `--write-qol` run in the vault.
 
