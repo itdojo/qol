@@ -284,11 +284,21 @@ prompt_static_ipv4() {
         IP_BITS="$(ask_value "Prefix bits" "24" "CIDR mask length, 1-32")"
         validate_cidr_bits "$IP_BITS" && break
     done
+    # "none" is a real answer: an isolated lab segment or a second NIC that must
+    # not claim the default route. An empty IP_GW omits gateway= from the file.
     while true; do
-        IP_GW="$(ask_value "Default gateway" "192.168.1.1" "the router on this subnet")"
+        IP_GW="$(ask_value "Default gateway" "192.168.1.1" "the router on this subnet, or 'none'")"
+        case "$IP_GW" in
+            [Nn][Oo][Nn][Ee]) IP_GW=""; break ;;
+        esac
         validate_ipv4 "$IP_GW" && break
     done
-    IP_DNS="$(ask_value "DNS servers" "1.1.1.1;9.9.9.9" "semicolon-separated")"
+    # Same "none" escape as the gateway, for an interface that carries only an
+    # address and prefix. An empty IP_DNS omits dns= from the file.
+    IP_DNS="$(ask_value "DNS servers" "1.1.1.1;9.9.9.9" "semicolon-separated, or 'none'")"
+    case "$IP_DNS" in
+        [Nn][Oo][Nn][Ee]) IP_DNS="" ;;
+    esac
     # Allow user to type with commas; normalize to semicolons for NM.
     IP_DNS="${IP_DNS//,/;}"
 }
@@ -393,8 +403,12 @@ write_connection_file() {
         printf "method=%s\n" "$IP_METHOD"
         if [[ "$IP_METHOD" == "manual" ]]; then
             printf "addresses=%s/%s\n" "$IP_ADDR" "$IP_BITS"
-            printf "gateway=%s\n" "$IP_GW"
-            printf "dns=%s\n" "$IP_DNS"
+            if [[ -n "$IP_GW" ]]; then
+                printf "gateway=%s\n" "$IP_GW"
+            fi
+            if [[ -n "$IP_DNS" ]]; then
+                printf "dns=%s\n" "$IP_DNS"
+            fi
             printf "ignore-auto-dns=true\n"
         fi
         printf "\n"
