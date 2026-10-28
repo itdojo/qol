@@ -5,7 +5,7 @@ Shell scripts and helpers for setting up and maintaining Linux and macOS machine
 ## Knowledge hub
 
 <!-- knowledge-hub:begin (public variant). create-project writes this block and refreshes it on a rerun. This repo is public, so the block names no private paths; the global contract's "Public repos" section resolves them. Repo-specific lines go after the end marker. -->
-This repo is public. It holds code, the tracker config the dojo- skills read in `docs/agents/`, and `docs/working-notes.md`, which is session scratch. Durable knowledge lives in the Dojobrain vault, where this project's slug is `qol`. Your global contract's "Public repos" section says where the vault is and where this project's MOC sits in it.
+This repo is public. It holds code, the tracker config the dojo- skills read in `docs/agents/`, and `docs/working-notes.md`, which is session scratch. Durable knowledge lives in the Dojobrain vault, where this project's slug is `qol`. Your global contract's "Public repos" section says where the vault is and where this project's MOC sits in it. Read that MOC before substantive work. If it is unreachable, stop and tell the user.
 
 Durable knowledge goes to the vault:
 
