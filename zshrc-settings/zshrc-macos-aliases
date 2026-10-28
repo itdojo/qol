@@ -36,17 +36,17 @@ alias tns="tmux new -s"              # New tmux session named <session_name>
 # ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
 #                                                                              ALIASES: DIRECTORIES
 # ⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼⎼
-alias vaults="cd ~/vaults/"
-alias vlt="cd ~/vaults/"
-alias dojobrain="cd ~/vaults/dojobrain/"
-alias brain="cd ~/vaults/dojobrain/"
-alias sleepybrain="cd ~/vaults/sleepybrain/"
-alias homebrain="cd ~/vaults/homebrain/"
-alias courseware="cd ~/courseware/"
-alias crs="cd ~/courseware/"
-alias projects="cd ~/projects/"
-alias prj="cd ~/projects/"
-alias ai="cd ~/courseware/ai"
-alias halow="cd ~/courseware/halow-lora-2026/"
-alias lora="cd ~/courseware/halow-lora-2026/"
+alias vaults="cd ~/vaults/"  # public-path-ok
+alias vlt="cd ~/vaults/"  # public-path-ok
+alias dojobrain="cd ~/vaults/dojobrain/"  # public-path-ok
+alias brain="cd ~/vaults/dojobrain/"  # public-path-ok
+alias sleepybrain="cd ~/vaults/sleepybrain/"  # public-path-ok
+alias homebrain="cd ~/vaults/homebrain/"  # public-path-ok
+alias courseware="cd ~/courseware/"  # public-path-ok
+alias crs="cd ~/courseware/"  # public-path-ok
+alias projects="cd ~/projects/"  # public-path-ok
+alias prj="cd ~/projects/"  # public-path-ok
+alias ai="cd ~/courseware/ai"  # public-path-ok
+alias halow="cd ~/courseware/halow-lora-2026/"  # public-path-ok
+alias lora="cd ~/courseware/halow-lora-2026/"  # public-path-ok
 

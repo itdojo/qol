@@ -15,7 +15,7 @@
 # lines. What it prints is exactly what the log_* helpers emit at
 # QOL_COLOR_DEPTH=none, so these lines still align with, and grep alongside,
 # the output of every other script in the repo:
-#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+#   the IT Dojo terminal design system; see script-design.md in this repo.
 
 # Authenticate to GitHub over SSH, reusing a running ssh-agent when possible.
 gitssh() {

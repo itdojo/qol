@@ -28,9 +28,9 @@
 # Pretty output — IT Dojo terminal design system
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Palette and rules:
-#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+#   the IT Dojo terminal design system; see script-design.md in this repo.
 # The ink case block below is GENERATED. Re-emit it rather than hand-editing:
-#   cd ~/vaults/dojobrain && uv run scripts/build-design-tokens.py --emit-bash
+#   uv run scripts/build-design-tokens.py --emit-bash   (in the Dojobrain vault)
 # Keep this whole section byte-identical to the copy in install_zsh_starship.sh.
 
 # Decide color and depth once. Re-callable so tests can force a tier.

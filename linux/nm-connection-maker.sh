@@ -46,7 +46,7 @@ readonly SCRIPT_VERSION="2026-07"
 # vault's build-design-tokens.py can only check the copies it knows about.
 # Same auto-download fallback as kernel_update.sh, so a lone scp'd file still
 # works. Palette and rules:
-#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+#   the IT Dojo terminal design system; see script-design.md in this repo.
 BASE_FUNCTIONS="$(dirname "$(realpath "$0")")/base_functions.sh"
 BASE_FUNCTIONS_URL="https://raw.githubusercontent.com/itdojo/qol/refs/heads/main/linux/base_functions.sh"
 

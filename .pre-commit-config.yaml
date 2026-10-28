@@ -1,0 +1,25 @@
+# The no-private-paths guard for a public repo. Setup-decision
+# "public-repos-carry-no-private-paths" (2026-10-28).
+#
+# qol is public and has no ported gate set yet, so this config holds the one
+# hook. `default_install_hook_types` names pre-push so `pre-commit install`
+# wires both stages.
+#
+# A line that has to keep a home path carries the marker `public-path-ok`
+# (a trailing comment), the same convention as gitleaks:allow. pygrep reads
+# only the files a commit or push touches, so an old untouched line passes
+# until someone edits it.
+
+default_install_hook_types: [pre-commit, pre-push]
+
+repos:
+  - repo: local
+    hooks:
+      - id: no-private-paths
+        name: no private paths in a public repo
+        language: pygrep
+        entry: '^(?!.*public-path-ok).*(~/vaults|~/projects/|~/courseware|/Users/)'
+        types: [text]
+        # This file names the patterns it refuses.
+        exclude: ^\.pre-commit-config\.yaml$
+        stages: [pre-commit, pre-push]

@@ -217,7 +217,7 @@ a terminal.
 
 `docs/nano-cheatsheet.html` is a standalone, printable page built on the IT Dojo
 design system. Its `:root` and `[data-theme="dark"]` token blocks are copied from
-`~/vaults/dojobrain/30-references/design-system/itdojo-design-system.html`, per
+the vault's `itdojo-design-system.html`, per
 the machine-wide convention. Constraints:
 
 - Self-contained: no external fonts, no CDN, no network at render time. The

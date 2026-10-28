@@ -53,7 +53,7 @@ FOUND_BREW=()
 # ‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒‒
 # Verified identical to linux/base_functions.sh by tests/test-theme-sync.sh.
 # Palette and rules:
-#   ~/vaults/dojobrain/30-references/design-system/itdojo-terminal-design-system.md
+#   the IT Dojo terminal design system; see script-design.md in this repo.
 # QOL_SEL and QOL_OKBG have no reader in every script that embeds this block;
 # a token ink with no consumer is suppressed, not deleted — dropping a color
 # from a palette copy makes it a worse copy.
