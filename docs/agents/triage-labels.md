@@ -2,7 +2,7 @@
 
 The skills speak in terms of five canonical triage roles. This file maps those roles to the label strings this repo's issue tracker uses. Each label string equals its role name unless the right-hand column says otherwise.
 
-| Label in mattpocock/skills | Label in our tracker | Meaning                                  |
+| Role                       | Label in our tracker | Meaning                                  |
 | -------------------------- | -------------------- | ---------------------------------------- |
 | `needs-triage`             | `needs-triage`       | Maintainer needs to evaluate this issue  |
 | `needs-info`               | `needs-info`         | Waiting on reporter for more information |
