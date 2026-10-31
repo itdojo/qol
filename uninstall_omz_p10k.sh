@@ -43,7 +43,9 @@ ZSHRC="${ZSHRC:-$HOME/.zshrc}"
 OMZ_DIR="$HOME/.oh-my-zsh"
 P10K_RC="$HOME/.p10k.zsh"
 DRY_RUN=""
-ASSUME_YES=""
+# Inherited, not reset: install_zsh_starship.sh sources this file, and a bare
+# ASSUME_YES="" here wiped the caller's ASSUME_YES=1 and hung unattended runs.
+ASSUME_YES="${ASSUME_YES:-}"
 FOUND_PATHS=()
 FOUND_ZSHRC=""
 FOUND_BREW=()
@@ -512,14 +514,17 @@ print_plan() {
 # Not ask_confirm: this is a three-way question (remove / keep / quit) and the
 # 130 return is what tells a sourcing caller to abort. Borrow the shape of
 # ask_confirm's prompt — ASK badge, then a jade caret — without its semantics.
+#
+# A non-TTY stdin proceeds, per script-design.md's confirmation rule. Without
+# that, a closed stdin made read fail every pass and the loop never ended.
 confirm_removal() {
-    [[ -n "$ASSUME_YES" ]] && return 0
+    [[ -n "$ASSUME_YES" || ! -t 0 ]] && return 0
     local answer=""
     while true; do
         log_ask "Remove Oh My Zsh and Powerlevel10k?"
         printf '    %s❯%s %s[y = remove / n = keep / q = quit]%s ' \
             "$QOL_PASS" "$QOL_RESET" "$QOL_META" "$QOL_RESET"
-        read -r answer
+        read -r answer || { echo; log_warn "No answer (end of input). Quitting."; return 130; }
         case "$answer" in
             [Yy]) return 0 ;;
             [Nn])
