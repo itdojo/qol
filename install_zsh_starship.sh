@@ -1095,8 +1095,8 @@ update_zshrc() {
     fi
 
     # Write paths as a literal $HOME rather than an expanded one, so the same
-    # .zshrc works on a machine where $HOME differs (macOS /Users/x vs
-    # Linux /home/x). zsh expands them at load time.
+    # .zshrc works on a machine where $HOME differs (a macOS home vs a
+    # Linux one). zsh expands them at load time.
     local plugin_dir_lit="${ZSH_PLUGIN_DIR/#$HOME/\$HOME}"
     local aliases_lit="${GIT_ALIASES_FILE/#$HOME/\$HOME}"
 
