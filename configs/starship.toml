@@ -45,7 +45,7 @@ $conda\
 $line_break\
 $character"""
 
-palette = 'catppuccin_mocha'
+palette = 'grove'
 
 [os]
 disabled = false
